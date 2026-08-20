@@ -19,6 +19,7 @@ from app.services.interview_engine import graph as interview_graph_module
 from app.services.interview_engine.nodes import _initialize_skills_to_cover
 from app.services.interview_engine.state import InterviewState
 from app.services.interview_engine.coordination import build_turn_id, coordination_event
+from app.services.interview_engine.response_handling import decide_response, response_notice, response_state_update
 from app.services.voice_service import voice_service
 from app.services.supervisor_service import supervisor_registry, SupervisorObservation
 import time as time_module
@@ -517,6 +518,12 @@ async def websocket_endpoint(
             "coordination_round_id": None,
             "coordination_trace": [],
             "last_candidate_answer": None,
+            "awaiting_candidate_response": True,
+            "last_response_turn_id": None,
+            "last_response_fingerprint": None,
+            "last_response_id": None,
+            "last_response_kind": None,
+            "active_question_id": None,
             "next_question": None,
             "code_snippet": None,
             "code_language": None,
@@ -578,6 +585,10 @@ async def websocket_endpoint(
                 raise ValueError("AI engine failed to generate opening question")
 
             q = current_values["next_question"]
+            await interview_graph_module.interview_graph.aupdate_state(config, {
+                "active_question_id": str(q.get("id")) if isinstance(q, dict) and q.get("id") is not None else None,
+                "awaiting_candidate_response": True,
+            })
 
             # Generate TTS audio for the question
             audio_base64 = ""
@@ -591,6 +602,7 @@ async def websocket_endpoint(
             response_data = {
                 "type": "question",
                 "data": q,
+                "question_id": q.get("id") if isinstance(q, dict) else None,
                 "job_role": job_role,
                 "is_coding": current_values.get("is_coding_mode", False),
                 "language": current_values.get("code_language", "python"),
@@ -625,11 +637,26 @@ async def websocket_endpoint(
             if "text" in message:
                 try:
                     payload = json.loads(message["text"])
-                    if payload.get("type") == "answer":
-                        user_answer = payload.get("data", "")
-                        typing_duration = payload.get("duration_seconds")
-                    elif payload.get("type") == "code":
-                        user_code = payload.get("data", "")
+                    if payload.get("type") in ("answer", "code"):
+                        current_state = await interview_graph_module.interview_graph.aget_state(config)
+                        current_values = current_state.values if current_state else {}
+                        response_decision = decide_response(payload, current_values)
+                        if not response_decision.accepted:
+                            await manager.send_json({
+                                "type": "response_rejected",
+                                "data": response_notice(response_decision),
+                            }, session_id)
+                            continue
+
+                        await manager.send_json({
+                            "type": "response_ack",
+                            "data": response_notice(response_decision),
+                        }, session_id)
+                        if response_decision.kind == "answer":
+                            user_answer = response_decision.content
+                            typing_duration = payload.get("duration_seconds")
+                        else:
+                            user_code = response_decision.content
                     elif payload.get("type") == "proctor_event":
                         # Route browser events to ProctorService.handle_browser_event()
                         # Message format: {"type": "proctor_event", "event": "tab_switch"|"paste"|"keystroke", ...}
@@ -819,6 +846,20 @@ async def websocket_endpoint(
                 if not user_answer:
                     await manager.send_json({"type": "error", "data": "Could not understand audio. Please try again."}, session_id)
                     continue
+                current_state = await interview_graph_module.interview_graph.aget_state(config)
+                current_values = current_state.values if current_state else {}
+                response_decision = decide_response({"type": "answer", "data": user_answer}, current_values)
+                if not response_decision.accepted:
+                    await manager.send_json({
+                        "type": "response_rejected",
+                        "data": response_notice(response_decision),
+                    }, session_id)
+                    continue
+                user_answer = response_decision.content
+                await manager.send_json({
+                    "type": "response_ack",
+                    "data": response_notice(response_decision),
+                }, session_id)
                 await manager.send_json({"type": "status", "data": f'Understood: "{user_answer}"'}, session_id)
 
             if user_answer or user_code:
@@ -869,6 +910,7 @@ async def websocket_endpoint(
                     turn_id = build_turn_id(turn_seed)
                     coordination_state = {**turn_seed, "turn_id": turn_id, "coordination_round_id": f"{turn_id}:debate"}
                     turn_update = {
+                        **response_state_update(response_decision),
                         "turn_id": turn_id,
                         "coordination_round_id": f"{turn_id}:debate",
                         "last_candidate_answer": user_answer or "[Code Submitted]",
@@ -949,9 +991,14 @@ async def websocket_endpoint(
                                 except Exception as e:
                                     logger.warning(f"TTS generation failed: {e}")
 
+                                await interview_graph_module.interview_graph.aupdate_state(config, {
+                                    "active_question_id": str(q.get("id")) if isinstance(q, dict) and q.get("id") is not None else None,
+                                    "awaiting_candidate_response": True,
+                                })
                                 response_data = {
                                     "type": "question",
                                     "data": q,
+                                    "question_id": q.get("id") if isinstance(q, dict) else None,
                                     "is_coding": output.get("is_coding_mode", False),
                                     "language": output.get("code_language", "python"),
                                 }

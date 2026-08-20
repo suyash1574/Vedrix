@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from .state import InterviewState
 from .coordination import build_debate_round_id, coordination_event
+from .response_handling import classify_response_intent
 from .providers import get_fast_llm, get_strong_llm, get_adaptive_llm, get_code_llm
 from app.services.memory_service import memory_service
 
@@ -662,30 +663,27 @@ async def evaluate_answer_node(state: InterviewState) -> Dict[str, Any]:
 
     last_message = state['messages'][-1]['content'] if state.get('messages') else ""
 
-    # Check for "thinking pause" — candidate explicitly asking for time to think.
-    # We don't penalize these — flag them so generate_question_node can re-prompt kindly.
-    is_thinking = (
-        last_message.lower().strip() in THINKING_INDICATORS or
-        any(thinking_phrase in last_message.lower() for thinking_phrase in THINKING_INDICATORS)
-    ) and len(last_message.strip()) < 50
-
-    if is_thinking:
-        # Don't penalize — return a "patient" eval that signals the next node to gently re-prompt
+    # Conversational control turns must not be scored as candidate failures.
+    response_intent = classify_response_intent(last_message)
+    if response_intent in {"thinking_pause", "clarification_request"}:
+        is_clarification = response_intent == "clarification_request"
         return {
             "last_evaluation": {
-                "score": 5.0,  # neutral
+                "score": 5.0,
                 "metrics": {"accuracy": 5, "clarity": 5, "depth": 5, "communication": 5},
-                "topic": "thinking_pause",
+                "topic": response_intent,
                 "skill_category": "behavioral",
                 "should_deep_dive": False,
                 "needs_easier": False,
                 "low_effort": False,
-                "is_thinking_pause": True,  # flag for generate_question to re-prompt kindly
-                "skill_identified": "patience"
+                "is_thinking_pause": not is_clarification,
+                "is_clarification_request": is_clarification,
+                "skill_identified": "patience" if not is_clarification else "clarification",
             },
             "latest_score": 5.0,
             "metrics": {"accuracy": 5, "clarity": 5, "depth": 5, "communication": 5},
-            "total_responses": state.get('total_responses', 0),  # don't increment
+            "total_responses": state.get('total_responses', 0),
+            "follow_up_requested": is_clarification,
         }
 
     # Check for low effort responses
@@ -850,12 +848,16 @@ async def update_memory_node(state: InterviewState) -> Dict[str, Any]:
     try:
         eval_result = state.get('last_evaluation', {})
 
-        # ── Thinking-pause short-circuit ──────────────────────────────────────
-        # Don't advance the question index, don't mark complete, just pass through.
-        if isinstance(eval_result, dict) and eval_result.get("is_thinking_pause"):
-            logger.info("update_memory_node: thinking pause — skipping index advance.")
+        # ── Conversational-control short-circuit ─────────────────────────────
+        # Thinking and clarification turns should re-prompt or answer briefly,
+        # not consume a scored question or change difficulty.
+        if isinstance(eval_result, dict) and (
+            eval_result.get("is_thinking_pause") or eval_result.get("is_clarification_request")
+        ):
+            logger.info("update_memory_node: conversational control turn — skipping index advance.")
             return {
                 "is_coding_mode": False,
+                "follow_up_requested": bool(eval_result.get("is_clarification_request")),
             }
 
         score = eval_result.get('score', 5.0)
@@ -1264,28 +1266,24 @@ async def consensus_synthesizer_node(state: InterviewState) -> Dict[str, Any]:
             last_user_message = m.get("content", "")
             break
 
-    is_thinking = (
-        last_user_message
-        and len(last_user_message.strip()) < 50
-        and (
-            last_user_message.lower().strip() in THINKING_INDICATORS
-            or any(p in last_user_message.lower() for p in THINKING_INDICATORS)
-        )
-    )
+    response_intent = classify_response_intent(last_user_message)
+    is_thinking = response_intent == "thinking_pause"
+    is_clarification = response_intent == "clarification_request"
 
-    if is_thinking:
-        logger.info("Detected thinking pause — skipping debate, returning neutral eval.")
+    if is_thinking or is_clarification:
+        logger.info("Detected conversational control turn (%s) — skipping debate, returning neutral eval.", response_intent)
         return {
             "last_evaluation": {
                 "score": 5.0,
                 "metrics": {"accuracy": 5, "clarity": 5, "depth": 5, "communication": 5},
-                "topic": "thinking_pause",
+                "topic": response_intent,
                 "skill_category": "behavioral",
                 "should_deep_dive": False,
                 "needs_easier": False,
                 "low_effort": False,
-                "is_thinking_pause": True,
-                "skill_identified": "patience",
+                "is_thinking_pause": is_thinking,
+                "is_clarification_request": is_clarification,
+                "skill_identified": "patience" if is_thinking else "clarification",
             },
             "latest_score": 5.0,
             "metrics": {"accuracy": 5, "clarity": 5, "depth": 5, "communication": 5},
@@ -1296,10 +1294,11 @@ async def consensus_synthesizer_node(state: InterviewState) -> Dict[str, Any]:
             "debate_rounds": {
                 "round_id": build_debate_round_id(state),
                 "status": "skipped",
-                "reason": "thinking_pause",
+                "reason": response_intent,
                 "agents": ["skeptic", "pragmatist", "bias_auditor"],
             },
-            "coordination_trace": [coordination_event(agent="consensus", event="debate_skipped", state=state, status="skipped", details={"reason": "thinking_pause"})],
+            "follow_up_requested": is_clarification,
+            "coordination_trace": [coordination_event(agent="consensus", event="debate_skipped", state=state, status="skipped", details={"reason": response_intent})],
         }
 
     llm = get_strong_llm()

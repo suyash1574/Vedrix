@@ -63,6 +63,12 @@ class InterviewState(TypedDict):
 
     # Latest candidate payload for coordinated interviewer/evaluator handoff.
     last_candidate_answer: Optional[str]
+    awaiting_candidate_response: bool
+    last_response_turn_id: Optional[str]
+    last_response_fingerprint: Optional[str]
+    last_response_id: Optional[str]
+    last_response_kind: Optional[str]
+    active_question_id: Optional[str]
 
     # Next question to be asked
     next_question: Optional[Dict]

@@ -13,6 +13,7 @@ import logging
 from typing import Any, Dict
 
 from .state import InterviewState
+from .response_handling import classify_response_intent
 from .nodes import generate_question_node, evaluate_answer_node
 from ..nooa_agents import (
     AnswerEvaluationRequest,
@@ -101,6 +102,27 @@ async def nooa_evaluator_node(state: InterviewState) -> Dict[str, Any]:
     # Preserve the existing deterministic protections for pauses and extremely
     # short answers. They are product policy, not model decisions.
     answer = _latest_answer(state)
+    response_intent = classify_response_intent(answer)
+    if response_intent in {"thinking_pause", "clarification_request"}:
+        is_clarification = response_intent == "clarification_request"
+        return {
+            "last_evaluation": {
+                "score": 5.0,
+                "metrics": {"accuracy": 5, "clarity": 5, "depth": 5, "communication": 5},
+                "topic": response_intent,
+                "skill_category": "behavioral",
+                "should_deep_dive": False,
+                "needs_easier": False,
+                "low_effort": False,
+                "is_thinking_pause": not is_clarification,
+                "is_clarification_request": is_clarification,
+                "skill_identified": "patience" if not is_clarification else "clarification",
+            },
+            "latest_score": 5.0,
+            "metrics": {"accuracy": 5, "clarity": 5, "depth": 5, "communication": 5},
+            "total_responses": int(state.get("total_responses") or 0),
+            "follow_up_requested": is_clarification,
+        }
     if len(answer.strip()) < 15:
         return await _call_fallback(evaluate_answer_node, state)
 
