@@ -1416,7 +1416,17 @@ Rules:
         }
     except Exception as e:
         logger.error(f"Code copilot failed: {e}")
-        return {"copilot_request_pending": False}
+        fallback = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "hint": "The coding assistant is temporarily unavailable. Re-check the failing line, simplify the input, and test one assumption at a time.",
+            "trigger": "provider_fallback",
+            "provider_error": type(e).__name__,
+        }
+        return {
+            "copilot_suggestions": list(state.get("copilot_suggestions", [])) + [fallback],
+            "copilot_request_pending": False,
+            "messages": [{"role": "assistant", "content": f"[Co-Pilot Tip]: {fallback['hint']}"}],
+        }
 
 
 async def debate_router_node(state: InterviewState) -> Dict[str, Any]:

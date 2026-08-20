@@ -90,13 +90,19 @@ def _draw_radar_chart(pdf, cx: float, cy: float, radius: float, skills: Dict[str
     pdf.set_line_width(0.5)
     pdf.set_fill_color(237, 233, 254) # Very light purple
     
-    try:
-        # Draw translucent filled polygon (supported by fpdf2)
-        with pdf.local_context(fill_opacity=0.35, stroke_opacity=1.0):
+    if hasattr(pdf, "polygon"):
+        try:
+            # Draw translucent filled polygon when supported by the installed FPDF build.
+            with pdf.local_context(fill_opacity=0.35, stroke_opacity=1.0):
+                pdf.polygon(score_points, style="FD")
+        except Exception:
+            # Some FPDF builds expose polygon but not opacity contexts.
             pdf.polygon(score_points, style="FD")
-    except Exception:
-        # Fallback for basic FPDF without local_context
-        pdf.polygon(score_points, style="FD")
+    else:
+        # Portable fallback for older FPDF builds without polygon primitives.
+        for i, point in enumerate(score_points):
+            next_point = score_points[(i + 1) % len(score_points)]
+            pdf.line(point[0], point[1], next_point[0], next_point[1])
 
     # 5. Draw small circular markers (ellipses) at each vertex
     pdf.set_fill_color(124, 58, 237)
@@ -135,6 +141,14 @@ def _draw_radar_chart(pdf, cx: float, cy: float, radius: float, skills: Dict[str
         pdf.text(adj_lx, adj_ly, label_text)
 
 
+def _pdf_output_bytes(pdf: FPDF) -> bytes:
+    """Return PDF output as bytes across supported PyFPDF/fpdf2 versions."""
+    output = pdf.output(dest="S")
+    if isinstance(output, str):
+        return output.encode("latin-1")
+    return bytes(output)
+
+
 def generate_interview_pdf(
     candidate_name: str,
     job_role: str,
@@ -149,7 +163,7 @@ def generate_interview_pdf(
         def header(self):
             self.set_font("helvetica", "B", 15)
             self.set_text_color(124, 58, 237) # Vedrix Purple
-            self.cell(0, 10, "Vedrix AI - Candidate Evaluation Report", border=False, align="C", new_x="LMARGIN", new_y="NEXT")
+            self.cell(0, 10, "Vedrix AI - Candidate Evaluation Report", border=False, align="C", ln=1)
             self.set_draw_color(124, 58, 237)
             self.line(10, 20, 200, 20)
             self.ln(10)
@@ -168,52 +182,52 @@ def generate_interview_pdf(
     pdf.set_text_color(0, 0, 0)
     pdf.cell(40, 8, "Candidate:")
     pdf.set_font("helvetica", "", 12)
-    pdf.cell(0, 8, _clean_unicode(candidate_name), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, _clean_unicode(candidate_name), ln=1)
 
     pdf.set_font("helvetica", "B", 12)
     pdf.cell(40, 8, "Role:")
     pdf.set_font("helvetica", "", 12)
-    pdf.cell(0, 8, _clean_unicode(job_role), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, _clean_unicode(job_role), ln=1)
 
     pdf.set_font("helvetica", "B", 12)
     pdf.cell(40, 8, "Score:")
     pdf.set_font("helvetica", "B", 14)
     pdf.set_text_color(52, 211, 153) # Greenish
-    pdf.cell(0, 8, f"{report.get('overall_score', 'N/A')} / 10.0", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"{report.get('overall_score', 'N/A')} / 10.0", ln=1)
     
     pdf.set_font("helvetica", "B", 12)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(40, 8, "Decision:")
     pdf.set_font("helvetica", "B", 12)
-    pdf.cell(0, 8, _clean_unicode(str(report.get('hire_recommendation', 'N/A')).upper()), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, _clean_unicode(str(report.get('hire_recommendation', 'N/A')).upper()), ln=1)
     pdf.ln(10)
 
     # Score Breakdown
     pdf.set_font("helvetica", "B", 14)
     pdf.set_text_color(124, 58, 237)
-    pdf.cell(0, 10, "Score Breakdown", border="B", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "Score Breakdown", border="B", ln=1)
     pdf.ln(3)
     pdf.set_font("helvetica", "B", 11)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(60, 8, "Technical Accuracy:")
     pdf.set_font("helvetica", "", 11)
-    pdf.cell(0, 8, str(report.get('technical_accuracy', 'N/A')), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, str(report.get('technical_accuracy', 'N/A')), ln=1)
     
     pdf.set_font("helvetica", "B", 11)
     pdf.cell(60, 8, "Communication Clarity:")
     pdf.set_font("helvetica", "", 11)
-    pdf.cell(0, 8, str(report.get('communication_clarity', 'N/A')), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, str(report.get('communication_clarity', 'N/A')), ln=1)
     
     pdf.set_font("helvetica", "B", 11)
     pdf.cell(60, 8, "Depth of Knowledge:")
     pdf.set_font("helvetica", "", 11)
-    pdf.cell(0, 8, str(report.get('depth_of_knowledge', 'N/A')), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, str(report.get('depth_of_knowledge', 'N/A')), ln=1)
     pdf.ln(8)
 
     # ── Skill Radar Chart Section ──
     pdf.set_font("helvetica", "B", 14)
     pdf.set_text_color(124, 58, 237)
-    pdf.cell(0, 10, "Candidate Skill Profile", border="B", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "Candidate Skill Profile", border="B", ln=1)
     pdf.ln(5)
     
     # Process skills dictionary
@@ -274,11 +288,11 @@ def generate_interview_pdf(
         pdf.set_font("helvetica", "B", 10)
         pdf.set_text_color(0, 0, 0)
         pdf.cell(100, 8, "Skill / Competency", border=1)
-        pdf.cell(40, 8, "Score", border=1, align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(40, 8, "Score", border=1, align="C", ln=1)
         pdf.set_font("helvetica", "", 10)
         for skill_name, score in final_skills.items():
             pdf.cell(100, 8, _clean_unicode(skill_name), border=1)
-            pdf.cell(40, 8, f"{score:.1f} / 10.0", border=1, align="C", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(40, 8, f"{score:.1f} / 10.0", border=1, align="C", ln=1)
         pdf.ln(5)
 
     pdf.add_page() # Executive Summary starts on Page 2
@@ -286,42 +300,42 @@ def generate_interview_pdf(
     # Executive Summary
     pdf.set_font("helvetica", "B", 14)
     pdf.set_text_color(124, 58, 237)
-    pdf.cell(0, 10, "Executive Summary", border="B", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "Executive Summary", border="B", ln=1)
     pdf.ln(3)
     pdf.set_font("helvetica", "I", 11)
     pdf.set_text_color(50, 50, 50)
-    pdf.multi_cell(0, 6, _clean_unicode(str(report.get('summary', 'No summary available.'))), new_x="LMARGIN", new_y="NEXT")
+    pdf.multi_cell(0, 6, _clean_unicode(str(report.get('summary', 'No summary available.'))))
     pdf.ln(8)
 
     # Strengths
     pdf.set_font("helvetica", "B", 14)
     pdf.set_text_color(124, 58, 237)
-    pdf.cell(0, 10, "Key Strengths", border="B", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "Key Strengths", border="B", ln=1)
     pdf.ln(3)
     pdf.set_font("helvetica", "", 11)
     pdf.set_text_color(0, 0, 0)
     for s in report.get("strengths", []):
-        pdf.cell(5, 6, "-", new_x="RIGHT")
-        pdf.multi_cell(0, 6, _clean_unicode(str(s)), new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(5, 6, "-")
+        pdf.multi_cell(0, 6, _clean_unicode(str(s)))
     pdf.ln(5)
 
     # Weaknesses
     pdf.set_font("helvetica", "B", 14)
     pdf.set_text_color(124, 58, 237)
-    pdf.cell(0, 10, "Areas for Improvement", border="B", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "Areas for Improvement", border="B", ln=1)
     pdf.ln(3)
     pdf.set_font("helvetica", "", 11)
     pdf.set_text_color(0, 0, 0)
     for w in report.get("weaknesses", []):
-        pdf.cell(5, 6, "-", new_x="RIGHT")
-        pdf.multi_cell(0, 6, _clean_unicode(str(w)), new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(5, 6, "-")
+        pdf.multi_cell(0, 6, _clean_unicode(str(w)))
     pdf.ln(5)
 
     # Transcript
     pdf.add_page()
     pdf.set_font("helvetica", "B", 14)
     pdf.set_text_color(124, 58, 237)
-    pdf.cell(0, 10, "Interview Transcript", border="B", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "Interview Transcript", border="B", ln=1)
     pdf.ln(5)
     
     for m in transcript:
@@ -336,15 +350,15 @@ def generate_interview_pdf(
             pdf.set_text_color(30, 30, 30)
             role_text = "[CANDIDATE]"
             
-        pdf.cell(0, 6, role_text, new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, role_text, ln=1)
         
         pdf.set_font("helvetica", "", 10)
         pdf.set_text_color(50, 50, 50)
         
-        pdf.multi_cell(0, 5, _clean_unicode(content), new_x="LMARGIN", new_y="NEXT")
+        pdf.multi_cell(0, 5, _clean_unicode(content))
         pdf.ln(4)
 
-    return bytes(pdf.output())
+    return _pdf_output_bytes(pdf)
 
 
 def generate_certificate(
@@ -370,10 +384,10 @@ def generate_certificate(
             # Logo area
             self.set_font("helvetica", "B", 36)
             self.set_text_color(124, 58, 237)
-            self.cell(0, 40, "VEDRIX", align="C", new_x="LMARGIN", new_y="NEXT")
+            self.cell(0, 40, "VEDRIX", align="C", ln=1)
             self.set_font("helvetica", "", 14)
             self.set_text_color(100, 100, 100)
-            self.cell(0, 10, "AI Interview Platform", align="C", new_x="LMARGIN", new_y="NEXT")
+            self.cell(0, 10, "AI Interview Platform", align="C", ln=1)
             self.ln(20)
 
     pdf = CertificatePDF()
@@ -382,37 +396,37 @@ def generate_certificate(
     # Certificate Title
     pdf.set_font("helvetica", "B", 32)
     pdf.set_text_color(50, 50, 50)
-    pdf.cell(0, 20, "Certificate of Completion", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 20, "Certificate of Completion", align="C", ln=1)
     pdf.ln(10)
 
     # Subtitle
     pdf.set_font("helvetica", "", 14)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 10, "This is to certify that", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "This is to certify that", align="C", ln=1)
     pdf.ln(15)
 
     # Candidate Name
     pdf.set_font("helvetica", "B", 28)
     pdf.set_text_color(124, 58, 237)
-    pdf.cell(0, 15, candidate_name, align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 15, candidate_name, align="C", ln=1)
     pdf.ln(15)
 
     # Achievement text
     pdf.set_font("helvetica", "", 14)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 10, "has successfully completed the AI-powered interview", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "has successfully completed the AI-powered interview", align="C", ln=1)
     pdf.ln(10)
 
     # Job Role
     pdf.set_font("helvetica", "B", 18)
     pdf.set_text_color(50, 50, 50)
-    pdf.cell(0, 12, f"for the role of {job_role or 'General Candidate'}", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 12, f"for the role of {job_role or 'General Candidate'}", align="C", ln=1)
     pdf.ln(15)
 
     # Score
     pdf.set_font("helvetica", "", 14)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 10, "with an overall performance score of", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "with an overall performance score of", align="C", ln=1)
     pdf.ln(8)
 
     pdf.set_font("helvetica", "B", 48)
@@ -423,13 +437,13 @@ def generate_certificate(
     else:
         pdf.set_text_color(239, 68, 68)  # Red
 
-    pdf.cell(0, 25, f"{overall_score:.1f}%", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 25, f"{overall_score:.1f}%", align="C", ln=1)
     pdf.ln(20)
 
     # Date
     pdf.set_font("helvetica", "", 12)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 8, f"Date of Completion: {date_completed}", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"Date of Completion: {date_completed}", align="C", ln=1)
     pdf.ln(25)
 
     # Signatures
@@ -437,13 +451,13 @@ def generate_certificate(
     pdf.set_text_color(50, 50, 50)
 
     pdf.cell(85, 10, "_______________________", align="L")
-    pdf.cell(0, 10, "_______________________", align="R", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "_______________________", align="R", ln=1)
 
     pdf.set_font("helvetica", "B", 10)
     pdf.cell(85, 8, "Vedrix AI Platform", align="L")
-    pdf.cell(0, 8, "Candidate", align="R", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, "Candidate", align="R", ln=1)
 
-    return bytes(pdf.output())
+    return _pdf_output_bytes(pdf)
 
 
 def generate_certificate_png(
