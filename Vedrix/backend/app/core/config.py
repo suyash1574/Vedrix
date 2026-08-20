@@ -16,11 +16,16 @@ class Settings(BaseSettings):
     CSRF_SECRET: str = "change-me-csrf-secret-in-production"
     
     # Database
-    DATABASE_URL: str = "sqlite+aiosqlite:///./vedrix.db"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/vedrix"
     # PostgreSQL SSL mode: "disable", "require", "verify-full".
-    # Default is empty so local Postgres (CI, docker-compose dev) is plaintext;
-    # production must override via env var (DB_SSL_MODE=require or verify-full).
-    DB_SSL_MODE: str = ""
+    DB_SSL_MODE: str = "disable"
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 1800
+    DB_POOL_PRE_PING: bool = True
+    LANGGRAPH_CHECKPOINT_ENABLED: bool = True
+    LANGGRAPH_CHECKPOINT_RETENTION_DAYS: int = 30
     
     # AI API Keys
     GROQ_API_KEY: str = ""
@@ -28,6 +33,10 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     APIFREE_API_KEY: str = ""
+
+    # NVIDIA Object-Oriented Agents (NOOA) migration flag
+    NOOA_ENABLED: bool = False
+    NOOA_MODEL: str = "nvidia_nim/nvidia/nemotron-3-super-120b-a12b"
     
     # OpenRouter Base URLs
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
@@ -80,15 +89,12 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Bulletproof fix: Ensure SQLite URL uses aiosqlite for async support
-if settings.DATABASE_URL.startswith("sqlite://"):
-    import logging
-    logging.warning(
-        f"config.py: Detected 'sqlite://' in DATABASE_URL. "
-        f"Auto-fixing to 'sqlite+aiosqlite://' for async support. "
-        f"Use 'sqlite+aiosqlite://' in your .env to silence this warning."
+# PostgreSQL is the only supported application database. Fail fast rather than
+# silently creating a local SQLite database that cannot support production scale.
+if not settings.DATABASE_URL.startswith("postgresql+asyncpg://"):
+    raise ValueError(
+        "DATABASE_URL must use postgresql+asyncpg://; SQLite is retired for Vedrix."
     )
-    settings.DATABASE_URL = settings.DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://", 1)
 
 # Ensure SECRET_KEY is secure if default or empty
 if settings.SECRET_KEY == "change-me-in-production-use-env-file" or not settings.SECRET_KEY:

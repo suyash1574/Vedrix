@@ -51,6 +51,9 @@ class InterviewState(TypedDict):
     # Latest evaluation
     last_evaluation: Optional[Dict]
 
+    # Per-answer typed evaluations used by the NOOA report/coaching agents
+    evaluation_history: List[Dict[str, Any]]
+
     # Next question to be asked
     next_question: Optional[Dict]
 

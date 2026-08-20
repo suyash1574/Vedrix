@@ -15,7 +15,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core import security
 from app.core.security import ALGORITHM
-from app.services.interview_engine.graph import interview_graph
+from app.services.interview_engine import graph as interview_graph_module
 from app.services.interview_engine.nodes import _initialize_skills_to_cover
 from app.services.interview_engine.state import InterviewState
 from app.services.voice_service import voice_service
@@ -511,6 +511,7 @@ async def websocket_endpoint(
             "interviewer_mode": "ai",
             "hr_instructions": None,
             "last_evaluation": None,
+            "evaluation_history": [],
             "next_question": None,
             "code_snippet": None,
             "code_language": None,
@@ -562,7 +563,7 @@ async def websocket_endpoint(
             current_values = None
             try:
                 async with asyncio.timeout(60):  # 60 second timeout for initial question
-                    async for event in interview_graph.astream(initial_state, config=config, stream_mode="values"):
+                    async for event in interview_graph_module.interview_graph.astream(initial_state, config=config, stream_mode="values"):
                         if event.get("next_question"):
                             current_values = event
             except asyncio.TimeoutError:
@@ -705,7 +706,7 @@ async def websocket_endpoint(
                                 "data": closing_msg,
                             }, session_id)
                         # Mark interview complete with advisor action
-                        await interview_graph.aupdate_state(config, {
+                        await interview_graph_module.interview_graph.aupdate_state(config, {
                             "interview_complete": True,
                             "completion_reason": "Interviewer closed the interview",
                             "advisor_action_taken": True,
@@ -720,7 +721,7 @@ async def websocket_endpoint(
 
                         if action == "override_difficulty":
                             new_diff = control.get("difficulty", "medium")
-                            await interview_graph.aupdate_state(config, {
+                            await interview_graph_module.interview_graph.aupdate_state(config, {
                                 "difficulty": new_diff,
                                 "supervisor_observations": [{
                                     "type": "manual_override",
@@ -734,7 +735,7 @@ async def websocket_endpoint(
 
                         elif action == "override_phase":
                             new_phase = control.get("phase", "technical")
-                            await interview_graph.aupdate_state(config, {
+                            await interview_graph_module.interview_graph.aupdate_state(config, {
                                 "current_phase": new_phase,
                                 "phase_transition": True,
                                 "previous_phase": None,
@@ -750,7 +751,7 @@ async def websocket_endpoint(
 
                         elif action == "set_control_mode":
                             mode = control.get("mode", "suggest")
-                            await interview_graph.aupdate_state(config, {
+                            await interview_graph_module.interview_graph.aupdate_state(config, {
                                 "supervisor_mode": mode,
                                 "supervisor_observations": [{
                                     "type": "control_mode_change",
@@ -764,7 +765,7 @@ async def websocket_endpoint(
                             await manager.send_json({"type": "status", "data": f"Supervisor mode: {mode}"}, session_id)
 
                         elif action == "force_close":
-                            await interview_graph.aupdate_state(config, {
+                            await interview_graph_module.interview_graph.aupdate_state(config, {
                                 "interview_complete": True,
                                 "completion_reason": "Supervisor/admin force-closed the interview",
                                 "advisor_action_taken": True,
@@ -783,18 +784,18 @@ async def websocket_endpoint(
 
                     elif payload.get("type") == "hr_whisper":
                         whisper_text = payload.get("data", "")
-                        await interview_graph.aupdate_state(config, {"hr_whisper_instructions": whisper_text})
+                        await interview_graph_module.interview_graph.aupdate_state(config, {"hr_whisper_instructions": whisper_text})
                         await manager.send_json({"type": "status", "data": "Whisper queued for next turn."}, session_id)
                         continue
 
                     elif payload.get("type") == "copilot_request":
                         current_code = payload.get("data", "")
                         await manager.send_json({"type": "status", "data": "Co-Pilot: Analyzing your workspace..."}, session_id)
-                        await interview_graph.aupdate_state(config, {
+                        await interview_graph_module.interview_graph.aupdate_state(config, {
                             "copilot_request_pending": True,
                             "code_snippet": current_code
                         })
-                        async for chunk in interview_graph.astream(None, config=config, stream_mode="updates"):
+                        async for chunk in interview_graph_module.interview_graph.astream(None, config=config, stream_mode="updates"):
                             for node_name, output in chunk.items():
                                 if node_name == "code_copilot" and output.get("copilot_suggestions"):
                                     await manager.send_json({
@@ -821,7 +822,7 @@ async def websocket_endpoint(
                     if user_answer and db_session_id:
                         if not typing_duration:
                             try:
-                                state_vals = await interview_graph.aget_state(config)
+                                state_vals = await interview_graph_module.interview_graph.aget_state(config)
                                 q_start = state_vals.values.get("question_start_epoch")
                                 if q_start:
                                     typing_duration = time.time() - q_start
@@ -864,7 +865,7 @@ async def websocket_endpoint(
                         await manager.send_json({"type": "status", "data": "Judge0: Executing code..."}, session_id)
                         
                         # Audit #17: Fetch current state to get correct code_language
-                        current_state_vals = await interview_graph.aget_state(config)
+                        current_state_vals = await interview_graph_module.interview_graph.aget_state(config)
                         current_lang = current_state_vals.values.get("code_language") or "python"
                         
                         exec_result = await code_execution_service.execute(
@@ -880,9 +881,9 @@ async def websocket_endpoint(
                             f"Errors: {exec_result['stderr'][:300]}"
                         )
                         update = {"code_snippet": user_code, "messages": [{"role": "user", "content": enriched_content}], "rag_context": rag_context}
-                    await interview_graph.aupdate_state(config, update)
+                    await interview_graph_module.interview_graph.aupdate_state(config, update)
 
-                    async for chunk in interview_graph.astream(None, config=config, stream_mode="updates"):
+                    async for chunk in interview_graph_module.interview_graph.astream(None, config=config, stream_mode="updates"):
                         for node_name, output in chunk.items():
                             if node_name in ("evaluate_answer", "evaluate_code", "consensus_synthesizer"):
                                 await manager.send_json({"type": "status", "data": "AI: Evaluating response..."}, session_id)
@@ -923,7 +924,7 @@ async def websocket_endpoint(
 
                                 await manager.send_json(response_data, session_id)
 
-                    final_state = await interview_graph.aget_state(config)
+                    final_state = await interview_graph_module.interview_graph.aget_state(config)
                     if final_state and final_state.values:
                         await manager.broadcast_to_hr({
                             "type": "state_sync",
@@ -974,7 +975,11 @@ async def websocket_endpoint(
                         await manager.send_json({"type": "status", "data": "Assessment complete. Generating report..."}, session_id)
 
                         final_history = final_state.values.get("messages", [])
-                        report = await evaluation_service.generate_final_report(job_role, final_history)
+                        report = await evaluation_service.generate_final_report(
+                            job_role,
+                            final_history,
+                            evaluation_history=final_state.values.get("evaluation_history", []),
+                        )
                         report_dict = report.model_dump()
 
                         # Persist session (#5 duration, #18 questions)
@@ -1150,7 +1155,7 @@ async def websocket_endpoint(
                         
                         # Try to capture whatever responses were made before disconnect
                         try:
-                            final_state = await interview_graph.aget_state(config)
+                            final_state = await interview_graph_module.interview_graph.aget_state(config)
                             if final_state and final_state.values:
                                 rec.responses = final_state.values.get("messages", [])
                                 rec.skill_matrix = final_state.values.get("topic_scores", {})
@@ -1181,7 +1186,7 @@ async def send_hr_instruction(
     current_hr: User = Depends(deps.get_current_hr),  # #14: auth required
 ):
     config = {"configurable": {"thread_id": session_id}}
-    await interview_graph.aupdate_state(config, {
+    await interview_graph_module.interview_graph.aupdate_state(config, {
         "hr_instructions": instruction.get("text", ""),
         "hr_whisper_instructions": instruction.get("text", "")
     })
@@ -1488,7 +1493,7 @@ async def hr_websocket_endpoint(
     try:
         # Send initial state sync to HR observer
         try:
-            state = await interview_graph.aget_state(config)
+            state = await interview_graph_module.interview_graph.aget_state(config)
             if state and state.values:
                 await websocket.send_json({
                     "type": "state_sync",
@@ -1512,7 +1517,7 @@ async def hr_websocket_endpoint(
                 payload = json.loads(data)
                 if payload.get("type") == "hr_whisper":
                     whisper_text = payload.get("data", "")
-                    await interview_graph.aupdate_state(config, {
+                    await interview_graph_module.interview_graph.aupdate_state(config, {
                         "hr_instructions": whisper_text,
                         "hr_whisper_instructions": whisper_text
                     })
@@ -1521,7 +1526,7 @@ async def hr_websocket_endpoint(
                     action = payload.get("action")
                     if action == "set_mode":
                         mode = payload.get("mode")
-                        await interview_graph.aupdate_state(config, {
+                        await interview_graph_module.interview_graph.aupdate_state(config, {
                             "supervisor_mode": mode,
                             "supervisor_observations": [{
                                 "type": "control_mode_change",
@@ -1535,7 +1540,7 @@ async def hr_websocket_endpoint(
                         await manager.send_json({"type": "supervisor_mode", "mode": mode}, session_id)
                         await manager.send_json({"type": "status", "data": f"Supervisor mode: {mode}"}, session_id)
                     elif action == "force_close":
-                        await interview_graph.aupdate_state(config, {
+                        await interview_graph_module.interview_graph.aupdate_state(config, {
                             "interview_complete": True,
                             "completion_reason": "HR force-closed the interview",
                             "advisor_action_taken": True,

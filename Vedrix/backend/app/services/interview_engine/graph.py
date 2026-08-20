@@ -1,5 +1,10 @@
 from langgraph.graph import StateGraph, END
+import logging
+from contextlib import AsyncExitStack
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from .state import InterviewState
 from .nodes import (
     generate_question_node,
@@ -23,7 +28,11 @@ from .react_nodes import (
     react_evaluator_node,
     react_supervisor_node,
 )
+from .nooa_nodes import nooa_interviewer_node, nooa_evaluator_node
+from app.core.config import settings
 import os
+
+logger = logging.getLogger(__name__)
 
 # Feature flag: when VEDRIX_REACT_GRAPH=1 (default), the graph uses the ReAct
 # wrappers (which themselves fall back to the deterministic nodes on failure).
@@ -31,10 +40,22 @@ import os
 _USE_REACT_GRAPH = os.environ.get("VEDRIX_REACT_GRAPH", "1").lower() not in (
     "0", "false", "no", "off"
 )
+_USE_NOOA_GRAPH = os.environ.get(
+    "VEDRIX_NOOA_GRAPH", "1" if settings.NOOA_ENABLED else "0"
+).lower() not in ("0", "false", "no", "off", "")
 
-# Node references the graph will actually use.
-_question_node = react_interviewer_node if _USE_REACT_GRAPH else generate_question_node
-_evaluator_node = react_evaluator_node if _USE_REACT_GRAPH else evaluate_answer_node
+# Node references the graph will actually use. NOOA is the opt-in migration
+# path; the supervisor remains on the existing ReAct/deterministic contract.
+_question_node = (
+    nooa_interviewer_node if _USE_NOOA_GRAPH
+    else react_interviewer_node if _USE_REACT_GRAPH
+    else generate_question_node
+)
+_evaluator_node = (
+    nooa_evaluator_node if _USE_NOOA_GRAPH
+    else react_evaluator_node if _USE_REACT_GRAPH
+    else evaluate_answer_node
+)
 _supervisor_node = react_supervisor_node if _USE_REACT_GRAPH else supervisor_node
 
 
@@ -65,7 +86,7 @@ def route_after_qa(state: InterviewState):
     return "sentiment"
 
 
-def create_interview_graph():
+def create_interview_graph(checkpointer=None):
     workflow = StateGraph(InterviewState)
 
     workflow.add_node("planner", planner_node)
@@ -134,11 +155,56 @@ def create_interview_graph():
         {"continue": "generate_question", END: END}
     )
  
-    memory = MemorySaver()
+    memory = checkpointer or MemorySaver()
     return workflow.compile(
         checkpointer=memory,
         interrupt_before=["sentiment"]
     )
 
 
+_checkpointer_stack: AsyncExitStack | None = None
 interview_graph = create_interview_graph()
+
+
+def _checkpoint_dsn() -> str:
+    """Convert SQLAlchemy asyncpg URL to a psycopg-compatible checkpoint DSN."""
+    raw = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://", 1)
+    parts = urlsplit(raw)
+    query = dict(parse_qsl(parts.query))
+    if settings.DB_SSL_MODE and settings.DB_SSL_MODE != "disable":
+        query["sslmode"] = settings.DB_SSL_MODE
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+async def initialize_interview_graph() -> None:
+    """Swap the import-time graph for a PostgreSQL-backed graph at startup."""
+    global _checkpointer_stack, interview_graph
+    if _checkpointer_stack is not None:
+        return
+    if not settings.LANGGRAPH_CHECKPOINT_ENABLED:
+        logger.warning("LangGraph PostgreSQL checkpointing is disabled; using MemorySaver")
+        return
+
+    stack = AsyncExitStack()
+    await stack.__aenter__()
+    try:
+        checkpointer = await stack.enter_async_context(
+            AsyncPostgresSaver.from_conn_string(_checkpoint_dsn())
+        )
+        await checkpointer.setup()
+        interview_graph = create_interview_graph(checkpointer=checkpointer)
+        _checkpointer_stack = stack
+        logger.info("LangGraph AsyncPostgresSaver initialized")
+    except Exception:
+        await stack.aclose()
+        logger.exception("Failed to initialize LangGraph PostgreSQL checkpointer")
+        raise
+
+
+async def close_interview_graph() -> None:
+    """Close the PostgreSQL checkpointer during application shutdown."""
+    global _checkpointer_stack, interview_graph
+    if _checkpointer_stack is not None:
+        await _checkpointer_stack.aclose()
+        _checkpointer_stack = None
+    interview_graph = create_interview_graph()

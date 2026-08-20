@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vedrix-backend-migrations
+  labels:
+    app: vedrix-backend
+    component: migration
+spec:
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: vedrix-backend
+        component: migration
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrations
+          image: vedrix/backend:latest
+          command: ["python", "-m", "alembic", "upgrade", "head"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: vedrix-secrets
+                  key: database-url
+            - name: DB_SSL_MODE
+              value: "require"
+            - name: LANGGRAPH_CHECKPOINT_ENABLED
+              value: "true"

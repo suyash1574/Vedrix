@@ -6,6 +6,11 @@ metadata:
     app: vedrix-backend
 spec:
   replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: vedrix-backend
@@ -40,6 +45,36 @@ spec:
                 secretKeyRef:
                   name: vedrix-secrets
                   key: groq-api-key
+            - name: OPENROUTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vedrix-secrets
+                  key: openrouter-api-key
+            - name: NVIDIA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vedrix-secrets
+                  key: nvidia-api-key
+            - name: DB_SSL_MODE
+              value: "require"
+            - name: DB_POOL_SIZE
+              value: "20"
+            - name: DB_MAX_OVERFLOW
+              value: "40"
+            - name: DB_POOL_TIMEOUT
+              value: "30"
+            - name: DB_POOL_RECYCLE
+              value: "1800"
+            - name: DB_POOL_PRE_PING
+              value: "true"
+            - name: LANGGRAPH_CHECKPOINT_ENABLED
+              value: "true"
+            - name: LANGGRAPH_CHECKPOINT_RETENTION_DAYS
+              value: "30"
+            - name: NOOA_ENABLED
+              value: "false"
+            - name: VEDRIX_NOOA_GRAPH
+              value: "false"
           resources:
             requests:
               memory: "256Mi"
@@ -47,6 +82,16 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /health/ready
