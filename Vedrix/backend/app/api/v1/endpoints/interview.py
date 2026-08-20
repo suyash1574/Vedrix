@@ -18,6 +18,7 @@ from app.core.security import ALGORITHM
 from app.services.interview_engine import graph as interview_graph_module
 from app.services.interview_engine.nodes import _initialize_skills_to_cover
 from app.services.interview_engine.state import InterviewState
+from app.services.interview_engine.coordination import build_turn_id, coordination_event
 from app.services.voice_service import voice_service
 from app.services.supervisor_service import supervisor_registry, SupervisorObservation
 import time as time_module
@@ -512,6 +513,10 @@ async def websocket_endpoint(
             "hr_instructions": None,
             "last_evaluation": None,
             "evaluation_history": [],
+            "turn_id": None,
+            "coordination_round_id": None,
+            "coordination_trace": [],
+            "last_candidate_answer": None,
             "next_question": None,
             "code_snippet": None,
             "code_language": None,
@@ -854,10 +859,32 @@ async def websocket_endpoint(
                     if not rag_context:
                         rag_context = rag_seed_context[:2500] if rag_seed_context else ""
 
+                    current_state = await interview_graph_module.interview_graph.aget_state(config)
+                    state_values = current_state.values if current_state else {}
+                    turn_seed = {
+                        "current_question_index": state_values.get("current_question_index", 0),
+                        "total_responses": state_values.get("total_responses", 0),
+                        "messages": state_values.get("messages", []),
+                    }
+                    turn_id = build_turn_id(turn_seed)
+                    coordination_state = {**turn_seed, "turn_id": turn_id, "coordination_round_id": f"{turn_id}:debate"}
+                    turn_update = {
+                        "turn_id": turn_id,
+                        "coordination_round_id": f"{turn_id}:debate",
+                        "last_candidate_answer": user_answer or "[Code Submitted]",
+                        "coordination_trace": [
+                            coordination_event(
+                                agent="orchestrator",
+                                event="candidate_turn_started",
+                                state=coordination_state,
+                                details={"has_code": bool(user_code), "has_text": bool(user_answer)},
+                            )
+                        ],
+                    }
                     update = (
-                        {"code_snippet": user_code, "messages": [{"role": "user", "content": "[Code Submitted]"}, {"role": "system", "content": "[Evaluation debate in progress...]"}], "rag_context": rag_context}
+                        {**turn_update, "code_snippet": user_code, "messages": [{"role": "user", "content": "[Code Submitted]"}, {"role": "system", "content": "[Evaluation debate in progress...]"}], "rag_context": rag_context}
                         if user_code
-                        else {"messages": [{"role": "user", "content": user_answer}], "rag_context": rag_context}
+                        else {**turn_update, "messages": [{"role": "user", "content": user_answer}], "rag_context": rag_context}
                     )
 
                     # Execute code via Judge0 before AI evaluation
@@ -880,11 +907,20 @@ async def websocket_endpoint(
                             f"Output: {exec_result['stdout'][:500]}\n"
                             f"Errors: {exec_result['stderr'][:300]}"
                         )
-                        update = {"code_snippet": user_code, "messages": [{"role": "user", "content": enriched_content}], "rag_context": rag_context}
+                        update = {**turn_update, "code_snippet": user_code, "last_candidate_answer": enriched_content, "messages": [{"role": "user", "content": enriched_content}], "rag_context": rag_context}
                     await interview_graph_module.interview_graph.aupdate_state(config, update)
 
                     async for chunk in interview_graph_module.interview_graph.astream(None, config=config, stream_mode="updates"):
                         for node_name, output in chunk.items():
+                            if output.get("coordination_trace"):
+                                await manager.send_json({
+                                    "type": "agent_coordination_update",
+                                    "data": {
+                                        "node": node_name,
+                                        "events": output["coordination_trace"],
+                                        "round": output.get("debate_rounds"),
+                                    },
+                                }, session_id)
                             if node_name in ("evaluate_answer", "evaluate_code", "consensus_synthesizer"):
                                 await manager.send_json({"type": "status", "data": "AI: Evaluating response..."}, session_id)
                                 if output.get("metrics"):
@@ -936,6 +972,8 @@ async def websocket_endpoint(
                                 "topic_scores": final_state.values.get("topic_scores", {}),
                                 "current_question": final_state.values.get("messages", [])[-1]["content"] if final_state.values.get("messages") else "",
                                 "supervisor_mode": final_state.values.get("supervisor_mode", "suggest"),
+                                "coordination_round": final_state.values.get("debate_rounds"),
+                                "coordination_trace": (final_state.values.get("coordination_trace", []) or [])[-20:],
                             }
                         }, session_id)
 
@@ -1502,6 +1540,7 @@ async def hr_websocket_endpoint(
                         "empathy_metrics": state.values.get("empathy_metrics", {}),
                         "copilot_suggestions": state.values.get("copilot_suggestions", []),
                         "debate_rounds": state.values.get("debate_rounds", {}),
+                        "coordination_trace": (state.values.get("coordination_trace", []) or [])[-20:],
                         "topic_scores": state.values.get("topic_scores", {}),
                         "current_question": state.values.get("messages", [])[-1]["content"] if state.values.get("messages") else "",
                         "supervisor_mode": state.values.get("supervisor_mode", "suggest"),

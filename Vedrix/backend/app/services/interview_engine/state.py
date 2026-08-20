@@ -54,6 +54,16 @@ class InterviewState(TypedDict):
     # Per-answer typed evaluations used by the NOOA report/coaching agents
     evaluation_history: List[Dict[str, Any]]
 
+    # ── Multi-agent Coordination Protocol ───────────────────────────────────
+    # Stable identity for the candidate response currently being processed.
+    turn_id: Optional[str]
+    coordination_round_id: Optional[str]
+    # Reducer-backed append-only trace; parallel agents must never overwrite it.
+    coordination_trace: Annotated[List[Dict[str, Any]], operator.add]
+
+    # Latest candidate payload for coordinated interviewer/evaluator handoff.
+    last_candidate_answer: Optional[str]
+
     # Next question to be asked
     next_question: Optional[Dict]
 
