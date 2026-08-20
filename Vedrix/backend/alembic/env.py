@@ -24,7 +24,8 @@ from app.models import (
     PlatformConfig, ConfigChangeLog, PasswordResetToken, InterviewSlot, SlotBooking,
     AuditLog, CandidateFeedback, HRFeedback, UserConsent, TraceEntry,
     LongitudinalProfile, InterviewPlan, ViolationRecord, CoachingPlan,
-    MatchResult, CandidateWorkflow
+    MatchResult, CandidateWorkflow, CandidateApplication, AssessmentAssignment,
+    AssessmentAttempt, ManualInterviewEntry, WorkflowAuditEvent
 )
 
 # add your model's MetaData object here

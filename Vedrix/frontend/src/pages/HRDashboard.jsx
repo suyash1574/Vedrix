@@ -1587,6 +1587,13 @@ const HRDashboard = () => {
                   </div>
 
                   <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => navigate(`/hr/drives/${drive.id}/hiring-workflow`)}
+                      className="flex items-center justify-center space-x-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 px-4 py-4 rounded-2xl font-bold hover:bg-cyan-500/20 transition-all text-sm"
+                    >
+                      <Briefcase size={16} />
+                      <span>Hiring Flow</span>
+                    </button>
                     <button onClick={() => handleGenerateLink(drive.id)}
                       className={`flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl font-bold transition-all text-sm ${
                         copiedId === drive.id ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-purple-600 text-white hover:bg-purple-500 shadow-lg shadow-purple-900/20'

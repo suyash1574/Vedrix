@@ -14,3 +14,10 @@ from .candidate_workflow import CandidateWorkflow
 from .password_reset import PasswordResetToken
 from .scheduling import InterviewSlot, SlotBooking
 from .config import PlatformConfig, ConfigChangeLog
+from .hiring_workflow import (
+    CandidateApplication,
+    AssessmentAssignment,
+    AssessmentAttempt,
+    ManualInterviewEntry,
+    WorkflowAuditEvent,
+)
