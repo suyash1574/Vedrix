@@ -573,7 +573,7 @@ const CommandPalette = () => {
               </div>
               <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                 <CmdIcon size={10} />
-                Vedrix Command
+                Autergo Command
               </div>
             </div>
           </motion.div>

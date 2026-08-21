@@ -62,7 +62,7 @@ const ReadyCheckWizard = ({ onReady }) => {
           <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center text-white">
             <BrainCircuit size={24} />
           </div>
-          <span className="text-xl font-black text-white tracking-tight">Vedrix <span className="text-purple-400">Proctor</span></span>
+          <span className="text-xl font-black text-white tracking-tight">Autergo <span className="text-purple-400">Proctor</span></span>
         </div>
 
         <AnimatePresence mode="wait">
@@ -1044,7 +1044,7 @@ const InterviewRoom = () => {
         <div className="flex items-center space-x-12">
           <div className="text-3xl font-black tracking-tighter flex items-center">
             <div className="w-8 h-8 bg-gradient-to-tr from-purple-600 to-indigo-400 rounded-lg mr-2" />
-            Vedrix
+            Autergo
           </div>
           <div className="h-8 w-px bg-white/10" />
           <div className="space-y-0.5">

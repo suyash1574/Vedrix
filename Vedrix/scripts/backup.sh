@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PostgreSQL backup script for Vedrix.
+# PostgreSQL backup script for Autergo.
 # Usage: DATABASE_URL=postgresql://... ./backup.sh production
 set -Eeuo pipefail
 

@@ -1,8 +1,8 @@
-# Vedrix End-to-End Hiring Workflow
+# Autergo End-to-End Hiring Workflow
 
 ## Purpose
 
-Vedrix now supports a recruiter-controlled hiring process from JD-specific candidate intake through ATS screening, online assessments, proctoring evidence review, AI or manual interviews, recruiter decisions, and a unified audit timeline.
+Autergo now supports a recruiter-controlled hiring process from JD-specific candidate intake through ATS screening, online assessments, proctoring evidence review, AI or manual interviews, recruiter decisions, and a unified audit timeline.
 
 > **Important fairness rule:** Proctoring signals are evidence for human review. A tab switch, paste event, camera anomaly, or typing anomaly does not automatically reject a candidate. Recruiters must record the review outcome and rationale.
 

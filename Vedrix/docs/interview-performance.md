@@ -1,4 +1,4 @@
-# Vedrix Interview Timing and Precision Improvements
+# Autergo Interview Timing and Precision Improvements
 
 ## Scope
 

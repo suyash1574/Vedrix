@@ -73,7 +73,7 @@ const Login = () => {
                 <Cpu size={22} />
               </div>
               <span className="text-2xl font-black tracking-tighter text-white">
-                Vedrix <span className="text-purple-400 text-sm align-top ml-1">AI</span>
+                Autergo <span className="text-purple-400 text-sm align-top ml-1">AI</span>
               </span>
             </Link>
           </div>
@@ -175,7 +175,7 @@ const Login = () => {
                 <Cpu size={20} />
               </div>
               <span className="text-xl font-black tracking-tighter text-white">
-                Vedrix <span className="text-purple-400 text-xs align-top ml-1">AI</span>
+                Autergo <span className="text-purple-400 text-xs align-top ml-1">AI</span>
               </span>
             </Link>
           </div>
@@ -185,7 +185,7 @@ const Login = () => {
               Welcome back
             </h2>
             <p className="text-slate-400 text-sm">
-              Sign in to your Vedrix workspace and pick up where you left off.
+              Sign in to your Autergo workspace and pick up where you left off.
             </p>
           </div>
 

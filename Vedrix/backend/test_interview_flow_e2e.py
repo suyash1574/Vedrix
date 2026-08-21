@@ -143,7 +143,7 @@ async def run_interview_session(jwt: str):
 
 
 async def main():
-    print(color("\n═══ Vedrix Interview Flow E2E Test ═══\n", "blue"))
+    print(color("\n═══ Autergo Interview Flow E2E Test ═══\n", "blue"))
 
     print(color("[1] Creating test student 'Aria Tester'...", "blue"))
     try:

@@ -9,7 +9,7 @@ const DataProcessingAgreement = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">1. Parties</h2>
             <p className="text-slate-300 leading-relaxed">
-              This Data Processing Agreement ("DPA") is entered into between Vedrix AI Interview System
+              This Data Processing Agreement ("DPA") is entered into between Autergo AI Interview System
               ("Processor") and the organization using the Service ("Controller").
             </p>
           </section>
@@ -93,7 +93,7 @@ const DataProcessingAgreement = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">10. Contact</h2>
             <p className="text-slate-300 leading-relaxed">
-              For questions about this DPA, please contact us at legal@vedrix.ai
+              For questions about this DPA, please contact us at legal@autergo.ai
             </p>
           </section>
         </div>

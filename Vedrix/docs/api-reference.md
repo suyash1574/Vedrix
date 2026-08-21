@@ -1,4 +1,4 @@
-# Vedrix API Reference
+# Autergo API Reference
 
 **Base URL:** `/api/v1`  
 **Protocol:** HTTP/HTTPS  
@@ -8,7 +8,7 @@
 
 ## Authentication
 
-Vedrix uses **cookie-based authentication** with httpOnly cookies and CSRF double-submit pattern. Tokens are never stored in JavaScript/localStorage.
+Autergo uses **cookie-based authentication** with httpOnly cookies and CSRF double-submit pattern. Tokens are never stored in JavaScript/localStorage.
 
 ### Auth Headers
 

@@ -1,4 +1,4 @@
-# Vedrix Operations Runbook
+# Autergo Operations Runbook
 
 **Audience:** On-call engineers, DevOps, and platform maintainers.  
 **Purpose:** Standard operating procedures for common operational scenarios.
@@ -108,11 +108,11 @@ If services are unhealthy, proceed to [Application Restart](#2-application-resta
 
 ```bash
 # Graceful restart
-docker-compose -f Vedrix/docker-compose.prod.yml down
-docker-compose -f Vedrix/docker-compose.prod.yml up -d
+docker-compose -f Autergo/docker-compose.prod.yml down
+docker-compose -f Autergo/docker-compose.prod.yml up -d
 
 # Verify
-docker-compose -f Vedrix/docker-compose.prod.yml ps
+docker-compose -f Autergo/docker-compose.prod.yml ps
 ```
 
 **Option B: Single Service Restart**
@@ -143,10 +143,10 @@ curl http://localhost:8000/health/ready
 
 ```bash
 # Rollback to previous version
-docker-compose -f Vedrix/docker-compose.prod.yml down
+docker-compose -f Autergo/docker-compose.prod.yml down
 docker pull vedrix/backend:previous-tag
 docker pull vedrix/frontend:previous-tag
-docker-compose -f Vedrix/docker-compose.prod.yml up -d
+docker-compose -f Autergo/docker-compose.prod.yml up -d
 ```
 
 ---

@@ -1,10 +1,10 @@
 # 🏗️ Software Architecture Document (SWADS)
 
-**Project:** Vedrix AI Interview System  
+**Project:** Autergo AI Interview System
 **Version:** 1.0.0
 
 ## 1. System Context Diagram
-The following diagram illustrates how Vedrix interacts with external entities and users.
+The following diagram illustrates how Autergo interacts with external entities and users.
 
 ```mermaid
 graph TD
@@ -18,7 +18,7 @@ graph TD
 ```
 
 ## 2. Layered Architecture
-Vedrix follows a clean, decoupled architecture:
+Autergo follows a clean, decoupled architecture:
 
 ### 2.1 Presentation Layer (Frontend)
 - **Framework:** React 19 (Vite) + TypeScript.

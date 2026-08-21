@@ -23,7 +23,7 @@ const renderWithRouter = (component) => {
 describe('Navbar', () => {
   it('renders logo', () => {
     renderWithRouter(<Navbar />);
-    expect(screen.getByText(/vedrix/i)).toBeInTheDocument();
+    expect(screen.getByText(/autergo/i)).toBeInTheDocument();
   });
 
   it('shows home link', () => {

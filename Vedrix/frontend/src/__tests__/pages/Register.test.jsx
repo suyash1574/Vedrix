@@ -31,7 +31,7 @@ describe('Register Page', () => {
 
   it('renders registration form with step 1 heading', () => {
     renderWithRouter(<Register />);
-    expect(screen.getByText(/how will you use vedrix\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/how will you use autergo\?/i)).toBeInTheDocument();
   });
 
   it('has first name input in step 2', () => {

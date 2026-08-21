@@ -1,6 +1,6 @@
 # 🔄 System Workflows & Logic
 
-**Project:** Vedrix AI Interview System  
+**Project:** Autergo AI Interview System
 **Version:** 1.0.0
 
 ## 1. Interview Engine Workflow
@@ -32,7 +32,7 @@ Candidates can join interviews without an account using secure, one-time tokens.
 ```mermaid
 sequenceDiagram
     participant HR as Recruiter
-    participant API as Vedrix API
+    participant API as Autergo API
     participant Email as SMTP Server
     participant C as Candidate
 

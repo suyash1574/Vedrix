@@ -12,12 +12,12 @@ const LandingSections = () => {
       <section id="about" className="py-20 bg-gradient-to-br from-white/5 to-white/10">
         <div className="max-w-7xl mx-auto px-8 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div>
-            <h2 className="text-3xl font-extrabold text-white mb-4">About Vedrix</h2>
+            <h2 className="text-3xl font-extrabold text-white mb-4">About Autergo</h2>
             <p className="text-slate-200 text-lg leading-relaxed">
-              Vedrix is an autonomous AI-powered interview orchestration platform designed to accelerate hiring with agentic intelligence.
+              Autergo is an autonomous AI-powered interview orchestration platform designed to accelerate hiring with agentic intelligence.
             </p>
             <p className="text-slate-200 text-lg leading-relaxed mt-4">
-              Built for modern teams, Vedrix blends a robust backend, adaptive interviewing, live evaluation, and instant feedback to shorten the hiring cycle.
+              Built for modern teams, Autergo blends a robust backend, adaptive interviewing, live evaluation, and instant feedback to shorten the hiring cycle.
             </p>
           </div>
           <div className="space-y-4">
@@ -47,7 +47,7 @@ const LandingSections = () => {
       <section id="features" className="py-20 bg-gradient-to-br from-white/5 to-white/10">
         <div className="max-w-7xl mx-auto px-8">
           <h2 className="text-3xl font-extrabold text-white mb-6">Key Features</h2>
-          <p className="text-slate-300 mb-6">A quick tour of Vedrix capabilities</p>
+          <p className="text-slate-300 mb-6">A quick tour of Autergo capabilities</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((f, i) => (
               <div key={i} className="p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition">

@@ -5,7 +5,7 @@ import os
 
 class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "Vedrix"
+    PROJECT_NAME: str = "Autergo"
     APP_VERSION: str = "1.0.0"
     
     # Security

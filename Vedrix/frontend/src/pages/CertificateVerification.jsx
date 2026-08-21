@@ -72,7 +72,7 @@ const CertificateVerification = () => {
             <div className="h-8 w-px bg-white/5" />
             <div>
               <h1 className="text-xl font-bold text-white">Certificate Verification</h1>
-              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Vedrix AI Interview Platform</p>
+              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Autergo AI Interview Platform</p>
             </div>
           </div>
         </div>
@@ -141,7 +141,7 @@ const CertificateVerification = () => {
             onClick={() => navigate('/register')}
             className="bg-purple-600 text-white px-8 py-3 rounded-xl text-sm font-bold hover:bg-purple-500 transition-all shadow-lg shadow-purple-900/30"
           >
-            Get Started with Vedrix
+            Get Started with Autergo
           </button>
         </div>
       </main>

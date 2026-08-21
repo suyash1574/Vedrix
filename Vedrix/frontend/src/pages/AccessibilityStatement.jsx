@@ -9,7 +9,7 @@ const AccessibilityStatement = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">Our Commitment</h2>
             <p className="text-slate-300 leading-relaxed">
-              Vedrix is committed to ensuring digital accessibility for people with disabilities.
+              Autergo is committed to ensuring digital accessibility for people with disabilities.
               We are continually improving the user experience for everyone and applying the
               relevant accessibility standards to ensure we provide equal access to all of our users.
             </p>
@@ -23,7 +23,7 @@ const AccessibilityStatement = () => {
               three levels of conformance: Level A, Level AA, and Level AAA.
             </p>
             <p className="text-slate-300 leading-relaxed mt-4">
-              Vedrix is partially conformant with <strong className="text-purple-400">WCAG 2.1 Level AA</strong>.
+              Autergo is partially conformant with <strong className="text-purple-400">WCAG 2.1 Level AA</strong>.
               Partially conformant means that some parts of the content do not fully conform
               to the accessibility standard.
             </p>
@@ -46,7 +46,7 @@ const AccessibilityStatement = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">Technologies Used</h2>
             <p className="text-slate-300 leading-relaxed">
-              Accessibility of Vedrix relies on the following technologies to work with the
+              Accessibility of Autergo relies on the following technologies to work with the
               particular combination of web browser and any assistive technologies or plugins
               installed on your computer:
             </p>
@@ -62,7 +62,7 @@ const AccessibilityStatement = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">Known Limitations</h2>
             <p className="text-slate-300 leading-relaxed mb-4">
-              Despite our best efforts to ensure accessibility of Vedrix, there may be some limitations.
+              Despite our best efforts to ensure accessibility of Autergo, there may be some limitations.
               Below is a description of known limitations:
             </p>
             <ul className="list-disc list-inside text-slate-300 space-y-2 ml-4">
@@ -75,11 +75,11 @@ const AccessibilityStatement = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">Feedback</h2>
             <p className="text-slate-300 leading-relaxed">
-              We welcome your feedback on the accessibility of Vedrix. Please let us know if you
+              We welcome your feedback on the accessibility of Autergo. Please let us know if you
               encounter accessibility barriers:
             </p>
             <ul className="list-disc list-inside text-slate-300 space-y-2 ml-4">
-              <li>Email: accessibility@vedrix.ai</li>
+              <li>Email: accessibility@autergo.ai</li>
               <li>We try to respond to feedback within 5 business days</li>
             </ul>
           </section>
@@ -87,7 +87,7 @@ const AccessibilityStatement = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">Assessment Approach</h2>
             <p className="text-slate-300 leading-relaxed">
-              Vedrix assessed the accessibility of this website by the following approaches:
+              Autergo assessed the accessibility of this website by the following approaches:
             </p>
             <ul className="list-disc list-inside text-slate-300 space-y-2 ml-4">
               <li>Self-evaluation using automated testing tools</li>

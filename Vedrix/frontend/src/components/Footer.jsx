@@ -55,7 +55,7 @@ const Footer = () => {
               <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-indigo-400 rounded-xl flex items-center justify-center text-white shadow-lg shadow-purple-900/20">
                 <Cpu size={22} />
               </div>
-              <span className="text-2xl font-black tracking-tighter text-white">Vedrix <span className="text-purple-400 text-sm align-top ml-1">AI</span></span>
+              <span className="text-2xl font-black tracking-tighter text-white">Autergo <span className="text-purple-400 text-sm align-top ml-1">AI</span></span>
             </div>
             <p className="text-slate-400 text-sm leading-relaxed max-w-xs">
               AI-powered interview platform that conducts adaptive interviews, evaluates candidates in real-time, and delivers structured reports.
@@ -128,7 +128,7 @@ const Footer = () => {
         {/* Bottom Bar */}
         <div className="mt-16 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-slate-600 text-xs font-bold">
-            © {new Date().getFullYear()} Vedrix. All rights reserved.
+            © {new Date().getFullYear()} Autergo. All rights reserved.
           </p>
 
           {/* Built with AI Badge */}

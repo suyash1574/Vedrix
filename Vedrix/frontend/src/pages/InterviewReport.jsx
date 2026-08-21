@@ -71,7 +71,7 @@ const InterviewReport = () => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Vedrix_Report_${sessionId}.pdf`);
+      link.setAttribute('download', `Autergo_Report_${sessionId}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -91,7 +91,7 @@ const InterviewReport = () => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Vedrix_Certificate_${sessionId}.pdf`);
+      link.setAttribute('download', `Autergo_Certificate_${sessionId}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -110,7 +110,7 @@ const InterviewReport = () => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Vedrix_Certificate_${sessionId}.png`);
+      link.setAttribute('download', `Autergo_Certificate_${sessionId}.png`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -152,7 +152,7 @@ const InterviewReport = () => {
   // Phase 2.4: Share to Twitter/X
   const handleShareToTwitter = () => {
     const score = report?.overall_score || 0;
-    const text = encodeURIComponent(`I scored ${score}/10 on Vedrix AI Interview! Check my certificate:`);
+    const text = encodeURIComponent(`I scored ${score}/10 on Autergo AI Interview! Check my certificate:`);
     const url = encodeURIComponent(`${window.location.origin}/verify/${shareData?.verification_token}`);
     const twitterUrl = `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
     window.open(twitterUrl, '_blank', 'width=600,height=400');

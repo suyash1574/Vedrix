@@ -1,6 +1,6 @@
-# Getting Started with Vedrix
+# Getting Started with Autergo
 
-Welcome to Vedrix! This guide will help you get the system up and running on your local machine.
+Welcome to Autergo! This guide will help you get the system up and running on your local machine.
 
 ## System Requirements
 
@@ -60,7 +60,7 @@ Frontend running on: http://localhost:5173
 API Documentation: http://localhost:8001/docs
 ```
 
-Open your browser and navigate to the frontend URL to access the Vedrix application.
+Open your browser and navigate to the frontend URL to access the Autergo application.
 
 ## First Steps
 
@@ -96,7 +96,7 @@ Open your browser and navigate to the frontend URL to access the Vedrix applicat
 
 **Database Connection Errors**
 - Ensure Docker is running: `docker info`
-- Start required services: `docker-compose -f Vedrix/docker-compose.yml up -d`
+- Start required services: `docker-compose -f Autergo/docker-compose.yml up -d`
 - Wait a few seconds for the database to initialize
 
 **Frontend Cannot Connect to API**
@@ -142,6 +142,6 @@ If you encounter issues not covered in this guide:
 1. Check the [Troubleshooting section](#troubleshooting) in this document
 2. Refer to the [Deployment Guide](./DEPLOYMENT.md) for more detailed setup instructions
 3. Look through existing [GitHub Issues](link-to-issues)
-4. Contact the development team at support@vedrix.com
+4. Contact the development team at support@autergo.ai
 
 Happy interviewing! 🎯

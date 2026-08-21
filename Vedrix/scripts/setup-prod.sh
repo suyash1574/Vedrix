@@ -1,10 +1,10 @@
 #!/bin/bash
-# Production setup script for Vedrix
+# Production setup script for Autergo
 # Run this once on a fresh server
 
 set -e
 
-echo "=== Vedrix Production Setup ==="
+echo "=== Autergo Production Setup ==="
 echo ""
 
 # Check if running as root

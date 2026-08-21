@@ -1,4 +1,4 @@
-# Vedrix Makefile
+# Autergo Makefile
 # Common development and deployment commands
 
 # Colors
@@ -15,7 +15,7 @@ NC := \033[0m # No Color
 
 help: ## Show this help message
 	@echo ""
-	@echo "Vedrix Makefile"
+	@echo "Autergo Makefile"
 	@echo "==============="
 	@echo ""
 	@echo "Development:"
@@ -53,7 +53,7 @@ install: ## Install all dependencies
 	@echo "$(GREEN)Installation complete!$(NC)"
 
 dev: ## Start development servers (requires run_dev.py)
-	@echo "$(BLUE)Starting Vedrix development servers...$(NC)"
+	@echo "$(BLUE)Starting Autergo development servers...$(NC)"
 	@python run_dev.py
 
 build: ## Build frontend for production

@@ -1,6 +1,6 @@
 # PostgreSQL Migration Guide
 
-Steps to upgrade Vedrix from SQLite (default) to PostgreSQL. The project is already 95% Postgres-ready — this guide finishes the last 5% and runs the switch.
+Steps to upgrade Autergo from SQLite (default) to PostgreSQL. The project is already 95% Postgres-ready — this guide finishes the last 5% and runs the switch.
 
 ## Why PostgreSQL
 

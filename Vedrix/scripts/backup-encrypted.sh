@@ -1,5 +1,5 @@
 #!/bin/bash
-# Encrypted database backup script for Vedrix
+# Encrypted database backup script for Autergo
 # Usage: ./backup-encrypted.sh [production|staging] [encrypt]
 
 set -e
@@ -14,7 +14,7 @@ ENCRYPTION_PASSWORD_FILE="$BACKUP_DIR/.backup_key"
 # Create backup directory if not exists
 mkdir -p "$BACKUP_DIR"
 
-echo "=== Vedrix Encrypted Backup ==="
+echo "=== Autergo Encrypted Backup ==="
 echo "Environment: $ENVIRONMENT"
 echo "Encryption: $ENCRYPT"
 echo ""

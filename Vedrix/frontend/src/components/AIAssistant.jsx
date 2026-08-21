@@ -35,7 +35,7 @@ const CANNED_RESPONSES = [
   {
     match: ['help', 'how', 'what'],
     text:
-      'I can help you navigate Vedrix, summarize sessions, or surface coaching tips. Try a suggestion below or just ask a question.',
+      'I can help you navigate Autergo, summarize sessions, or surface coaching tips. Try a suggestion below or just ask a question.',
   },
 ];
 

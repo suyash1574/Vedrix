@@ -1,6 +1,6 @@
 # Safe recurring GitHub synchronization
 
-Vedrix uses `scripts/sync-github.sh` for recurring synchronization. The script is deliberately conservative: it updates only `autergo/production-hardening`, fast-forwards from `origin`, scans tracked files for common credential patterns, runs `git diff --check`, runs the production-file validator when available, commits validated changes, and pushes only that feature branch. It never pushes directly to `main`.
+Autergo uses `scripts/sync-github.sh` for recurring synchronization. The script is deliberately conservative: it updates only `autergo/production-hardening`, fast-forwards from `origin`, scans tracked files for common credential patterns, runs `git diff --check`, runs the production-file validator when available, commits validated changes, and pushes only that feature branch. It never pushes directly to `main`.
 
 ## Recommended operating model
 

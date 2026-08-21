@@ -1,6 +1,6 @@
-# 🤖 Vedrix: System Prompt & Blueprint
+# 🤖 Autergo: System Prompt & Blueprint
 
-**Project Name:** Vedrix
+**Project Name:** Autergo
 **Core Tech:** FastAPI, React, PostgreSQL, OpenRouter.
 
 ## 🏗️ Architectural Mandates

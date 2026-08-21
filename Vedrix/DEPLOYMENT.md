@@ -1,4 +1,4 @@
-# Vedrix Deployment Guide
+# Autergo Deployment Guide
 
 ## Quick Start
 

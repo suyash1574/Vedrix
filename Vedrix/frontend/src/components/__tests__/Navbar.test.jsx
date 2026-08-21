@@ -20,7 +20,7 @@ describe('Navbar', () => {
       </BrowserRouter>
     );
     
-    expect(screen.getByText(/Vedrix/i)).toBeInTheDocument();
+    expect(screen.getByText(/Autergo/i)).toBeInTheDocument();
     expect(screen.getByText(/Sign In/i)).toBeInTheDocument();
     expect(screen.getByText(/Register/i)).toBeInTheDocument();
   });

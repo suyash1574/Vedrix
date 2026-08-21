@@ -1374,7 +1374,7 @@ const HRDashboard = () => {
             <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-indigo-400 rounded-xl flex items-center justify-center text-white shadow-lg shadow-purple-900/30">
               <Briefcase size={20} />
             </div>
-            <span className="text-xl font-bold tracking-tight text-white">Vedrix <span className="text-purple-400">HR</span></span>
+            <span className="text-xl font-bold tracking-tight text-white">Autergo <span className="text-purple-400">HR</span></span>
           </Link>
           <button 
             onClick={() => setIsSidebarOpen(false)} 

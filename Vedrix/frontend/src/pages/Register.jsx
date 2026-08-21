@@ -117,7 +117,7 @@ const Register = () => {
     if (success) {
       addToast({
         type: 'success',
-        title: 'Welcome to Vedrix',
+        title: 'Welcome to Autergo',
         message: 'Your account is ready — sign in to get started.',
       });
       navigate('/login');
@@ -142,7 +142,7 @@ const Register = () => {
               <Cpu size={22} />
             </div>
             <span className="text-2xl font-black tracking-tighter text-white">
-              Vedrix <span className="text-purple-400 text-sm align-top ml-1">AI</span>
+              Autergo <span className="text-purple-400 text-sm align-top ml-1">AI</span>
             </span>
           </Link>
 
@@ -154,7 +154,7 @@ const Register = () => {
               Build the future of <span className="gradient-text">interviews</span>.
             </h1>
             <p className="text-slate-400 text-sm leading-relaxed max-w-md">
-              Whether you're growing your career or hiring world-class talent — Vedrix
+              Whether you're growing your career or hiring world-class talent — Autergo
               gives you a thoughtful, agentic AI partner.
             </p>
           </div>
@@ -183,7 +183,7 @@ const Register = () => {
                 <Cpu size={20} />
               </div>
               <span className="text-xl font-black tracking-tighter text-white">
-                Vedrix <span className="text-purple-400 text-xs align-top ml-1">AI</span>
+                Autergo <span className="text-purple-400 text-xs align-top ml-1">AI</span>
               </span>
             </Link>
           </div>
@@ -225,7 +225,7 @@ const Register = () => {
               Step {step} of {STEPS.length}
             </p>
             <h2 className="text-3xl font-black tracking-tighter text-white mt-1">
-              {step === 1 && 'How will you use Vedrix?'}
+              {step === 1 && 'How will you use Autergo?'}
               {step === 2 && 'Tell us about yourself'}
               {step === 3 && 'Secure your account'}
             </h2>

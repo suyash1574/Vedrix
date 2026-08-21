@@ -36,17 +36,17 @@ async def lifespan(app: FastAPI):
     await session_cleanup.start_cleanup_loop(interval_seconds=300)  # Every 5 minutes
     # Orchestrator: Start scheduled workflow checks (every 15 minutes)
     await orchestrator_scheduler.start(interval_seconds=900)
-    logger.info("Vedrix backend started — DB, cache, and session cleanup initialized")
+    logger.info("Autergo backend started — DB, cache, and session cleanup initialized")
     yield
     # Shutdown logic
     await orchestrator_scheduler.stop()
     await session_cleanup.stop_cleanup_loop()
     await close_cache()
     await close_interview_graph()
-    logger.info("Vedrix backend shutting down")
+    logger.info("Autergo backend shutting down")
 
 app = FastAPI(
-    title="Vedrix AI Interview System",
+    title="Autergo AI Interview System",
     description="Modern AI-powered interview platform",
     version="1.0.0",
     lifespan=lifespan,
@@ -166,4 +166,4 @@ async def readiness_check():
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to Vedrix API", "status": "online"}
+    return {"message": "Welcome to Autergo API", "status": "online"}

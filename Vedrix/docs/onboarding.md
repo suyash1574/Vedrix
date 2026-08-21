@@ -1,6 +1,6 @@
-# Vedrix Developer Onboarding Guide
+# Autergo Developer Onboarding Guide
 
-**Audience:** New developers joining the Vedrix team.  
+**Audience:** New developers joining the Autergo team.
 **Goal:** Get productive within your first week.
 
 ---
@@ -67,7 +67,7 @@ docker-compose --version
 
 ```bash
 # Start PostgreSQL + Redis
-docker-compose -f Vedrix/docker-compose.yml up -d
+docker-compose -f Autergo/docker-compose.yml up -d
 
 # Verify they're running
 docker ps
@@ -117,7 +117,7 @@ FRONTEND_URL=http://localhost:5173
 ### 5. Start the Application
 
 ```bash
-# From the Vedrix root directory
+# From the Autergo root directory
 python run_dev.py
 ```
 
@@ -148,7 +148,7 @@ open http://localhost:5173
 ### Project Structure
 
 ```
-Vedrix/
+Autergo/
 ├── backend/                    # FastAPI Python backend
 │   ├── main.py                 # App entry point
 │   ├── app/
@@ -352,7 +352,7 @@ Both backend and frontend have hot reload enabled in development:
 
 - SQLite DB file: `Vedrix/backend/vedrix.db` (check .gitignore — it should be excluded)
 - For clean slate: Delete the file and restart the backend
-- For PostgreSQL: Use `docker-compose -f Vedrix/docker-compose.yml up`
+- For PostgreSQL: Use `docker-compose -f Autergo/docker-compose.yml up`
 
 ### AI Provider Keys
 
@@ -384,8 +384,8 @@ cd frontend && npm test                                  # Frontend tests
 cd frontend && npm run lint                              # ESLint
 
 # Database
-docker-compose -f Vedrix/docker-compose.yml up -d       # Start PG + Redis
-docker-compose -f Vedrix/docker-compose.yml down        # Stop services
+docker-compose -f Autergo/docker-compose.yml up -d       # Start PG + Redis
+docker-compose -f Autergo/docker-compose.yml down        # Stop services
 
 # Building
 cd frontend && npm run build                             # Production build

@@ -1,6 +1,6 @@
-# 🎨 Vedrix Frontend
+# 🎨 Autergo Frontend
 
-The frontend for Vedrix is a modern, high-performance React application built with **React 19**, **Vite**, and **Tailwind CSS v4**. It features a glassy, dark-themed interface designed for a professional interview experience.
+The frontend for Autergo is a modern, high-performance React application built with **React 19**, **Vite**, and **Tailwind CSS v4**. It features a glassy, dark-themed interface designed for a professional interview experience.
 
 ## 🚀 Key Features
 
@@ -34,7 +34,7 @@ The frontend for Vedrix is a modern, high-performance React application built wi
 
 ### Prerequisites
 - Node.js 20+
-- A running backend instance (see `Vedrix/backend/README.md`)
+- A running backend instance (see `Autergo/backend/README.md`)
 
 ### Installation
 ```bash

@@ -1,6 +1,6 @@
 # 🗄️ Database Design & Entity Relationship
 
-**Project:** Vedrix AI Interview System  
+**Project:** Autergo AI Interview System
 **Version:** 1.0.0
 
 ## 1. Entity Relationship Diagram (ERD)
@@ -72,7 +72,7 @@ erDiagram
 ```
 
 ## 2. Security & Encryption Policy
-Vedrix implements a tiered data protection strategy:
+Autergo implements a tiered data protection strategy:
 
 - **PII Protection:** Student names, emails, and phone numbers are stored in plain text for fast lookup but are guarded by strict RBAC.
 - **Sensitive Content:** `responses`, `resume_text`, and `ai_feedback` are stored as `EncryptedString` or `EncryptedJSON` using AES-128 (Fernet).

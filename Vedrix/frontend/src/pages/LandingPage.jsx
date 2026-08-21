@@ -140,7 +140,7 @@ const LandingPage = () => {
             </h1>
 
             <p className="text-lg text-slate-400 max-w-xl leading-relaxed">
-              Vedrix conducts adaptive AI interviews, evaluates candidates in real-time, and delivers structured reports — so your team can focus on the right people.
+              Autergo conducts adaptive AI interviews, evaluates candidates in real-time, and delivers structured reports — so your team can focus on the right people.
             </p>
 
             <div className="flex flex-wrap gap-4">
@@ -219,7 +219,7 @@ const LandingPage = () => {
                     <BrainCircuit size={20} className="text-white" />
                   </div>
                   <div>
-                    <p className="text-white font-bold text-sm">Vedrix AI Interviewer</p>
+                    <p className="text-white font-bold text-sm">Autergo AI Interviewer</p>
                     <div className="flex items-center space-x-1">
                       <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full pulse-glow" />
                       <p className="text-emerald-400 text-[10px] font-bold uppercase tracking-widest">Live</p>
@@ -298,7 +298,7 @@ const LandingPage = () => {
       <section className="py-24 px-6 md:px-12 border-t border-white/5">
         <div className="max-w-7xl mx-auto">
           <FadeInSection className="text-center mb-16">
-            <p className="text-purple-400 text-xs font-black uppercase tracking-[0.3em] mb-3">What Vedrix Does</p>
+            <p className="text-purple-400 text-xs font-black uppercase tracking-[0.3em] mb-3">What Autergo Does</p>
             <h2 className="text-4xl md:text-5xl font-black text-white tracking-tight">
               Everything you need to hire better
             </h2>
@@ -364,7 +364,7 @@ const LandingPage = () => {
               {
                 name: 'Sarah Chen',
                 role: 'Head of Talent, TechCorp',
-                text: 'Vedrix cut our screening time by 70%. The AI interviews are remarkably natural and the reports are incredibly detailed.',
+                text: 'Autergo cut our screening time by 70%. The AI interviews are remarkably natural and the reports are incredibly detailed.',
                 stars: 5,
               },
               {
@@ -403,9 +403,9 @@ const LandingPage = () => {
       <section className="py-24 px-6 md:px-12 border-t border-white/5">
         <div className="max-w-4xl mx-auto">
           <FadeInSection className="text-center mb-16">
-            <p className="text-purple-400 text-xs font-black uppercase tracking-[0.3em] mb-3">Why Vedrix</p>
+            <p className="text-purple-400 text-xs font-black uppercase tracking-[0.3em] mb-3">Why Autergo</p>
             <h2 className="text-4xl md:text-5xl font-black text-white tracking-tight">
-              Vedrix vs Traditional Interviews
+              Autergo vs Traditional Interviews
             </h2>
           </FadeInSection>
 
@@ -415,7 +415,7 @@ const LandingPage = () => {
                 <thead>
                   <tr className="border-b border-white/5">
                     <th className="px-6 py-5 text-xs font-black uppercase text-slate-500 tracking-widest">Feature</th>
-                    <th className="px-6 py-5 text-xs font-black uppercase text-purple-400 tracking-widest text-center">Vedrix AI</th>
+                    <th className="px-6 py-5 text-xs font-black uppercase text-purple-400 tracking-widest text-center">Autergo AI</th>
                     <th className="px-6 py-5 text-xs font-black uppercase text-slate-500 tracking-widest text-center">Traditional</th>
                   </tr>
                 </thead>
@@ -483,7 +483,7 @@ const LandingPage = () => {
               Ready to transform your hiring?
             </h2>
             <p className="text-slate-400 text-lg mb-10">
-              Join teams using Vedrix to run faster, fairer, and more insightful interviews.
+              Join teams using Autergo to run faster, fairer, and more insightful interviews.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
               {isAuthenticated ? (

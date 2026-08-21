@@ -1,6 +1,6 @@
-# 🧠 Vedrix Next-Generation Agentic AI Architecture
+# 🧠 Autergo Next-Generation Agentic AI Architecture
 
-This document describes the architectural specifications, communication protocols, and execution topology of the next-generation agentic AI features implemented in the Vedrix AI Interview System.
+This document describes the architectural specifications, communication protocols, and execution topology of the next-generation agentic AI features implemented in the Autergo AI Interview System.
 
 ---
 
