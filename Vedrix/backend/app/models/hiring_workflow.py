@@ -35,6 +35,9 @@ class CandidateApplication(SQLModel, table=True):
     match_score: Optional[float] = None
     match_breakdown: Optional[Any] = Field(default=None, sa_column=Column(JSON))
     screening_notes: Optional[str] = Field(default=None, sa_column=Column(Text))
+    workflow_policy_snapshot: Optional[Any] = Field(default=None, sa_column=Column(JSON))
+    workflow_policy_version: int = Field(default=1, nullable=False)
+    proctoring_consent_version: Optional[str] = None
     submitted_at: datetime = Field(default_factory=utc_now, nullable=False)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, nullable=False)
@@ -57,6 +60,8 @@ class AssessmentAssignment(SQLModel, table=True):
     assessment_type: str = Field(default="online_test", nullable=False)
     instructions: Optional[str] = Field(default=None, sa_column=Column(Text))
     config: Optional[Any] = Field(default=None, sa_column=Column(JSON))
+    definition_id: Optional[int] = Field(default=None, foreign_key="assessment_definition.id")
+    policy_version: int = Field(default=1, nullable=False)
     duration_minutes: int = Field(default=45, nullable=False)
     passing_score: Optional[float] = None
     required: bool = Field(default=True, nullable=False)
@@ -92,6 +97,8 @@ class AssessmentAttempt(SQLModel, table=True):
     result: Optional[str] = None
     answers: Optional[Any] = Field(default=None, sa_column=Column(EncryptedJSON))
     proctor_summary: Optional[Any] = Field(default=None, sa_column=Column(JSON))
+    proctoring_consent_version: Optional[str] = None
+    correlation_id: Optional[str] = Field(default=None, index=True)
     cheating_status: str = Field(default="not_reviewed", nullable=False)
     reviewer_id: Optional[int] = Field(default=None, foreign_key="user.id")
     reviewer_notes: Optional[str] = Field(default=None, sa_column=Column(Text))
@@ -148,4 +155,10 @@ class WorkflowAuditEvent(SQLModel, table=True):
     to_state: Optional[str] = None
     rationale: Optional[str] = Field(default=None, sa_column=Column(Text))
     payload: Optional[Any] = Field(default=None, sa_column=Column(JSON))
+    stage_key: Optional[str] = Field(default=None, index=True)
+    correlation_id: Optional[str] = Field(default=None, index=True)
+    policy_version: Optional[int] = None
+    source: str = Field(default="application", nullable=False)
+    event_hash: Optional[str] = None
+    previous_event_hash: Optional[str] = None
     occurred_at: datetime = Field(default_factory=utc_now, nullable=False, index=True)

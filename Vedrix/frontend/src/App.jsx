@@ -7,6 +7,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import InterviewRoom from './pages/InterviewRoom';
 import CandidateApplicationForm from './pages/CandidateApplicationForm';
+import AssessmentRoom from './pages/AssessmentRoom';
 import AdminDashboard from './pages/AdminDashboard';
 import HRDashboard from './pages/HRDashboard';
 import StudentDashboard from './pages/StudentDashboard';
@@ -115,6 +116,7 @@ function App() {
 
             {/* Public recruiter-configured candidate application */}
             <Route path="/apply/:token" element={<CandidateApplicationForm />} />
+            <Route path="/assessment/:assignmentId" element={<AssessmentRoom />} />
 
             {/* Interview Room (Public-ish/Self-protected) */}
             <Route path="/interview" element={<InterviewRoom />} />

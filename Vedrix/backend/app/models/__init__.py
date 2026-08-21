@@ -21,3 +21,12 @@ from .hiring_workflow import (
     ManualInterviewEntry,
     WorkflowAuditEvent,
 )
+from .pipeline import (
+    HiringPipelineStageRun,
+    AssessmentDefinition,
+    AssessmentQuestion,
+    AssessmentResponse,
+    ProctorEvidenceEvent,
+    AIInterviewStageReview,
+    HumanInterviewSchedule,
+)

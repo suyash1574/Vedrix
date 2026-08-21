@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     NOOA_ENABLED: bool = False
     NOOA_MODEL: str = "nvidia_nim/nvidia/nemotron-3-super-120b-a12b"
 
+    # Ordered hiring pipeline rollout
+    HIRING_PIPELINE_V2_ENABLED: bool = True
+
     # Live interview latency and precision budgets
     INTERVIEW_TURN_TIMEOUT_SECONDS: float = 20.0
     INTERVIEW_QUESTION_TIMEOUT_SECONDS: float = 10.0
@@ -61,7 +64,7 @@ class Settings(BaseSettings):
     MAIL_PORT: int = 587
     MAIL_USERNAME: str = ""
     MAIL_PASSWORD: str = ""
-    MAIL_FROM_NAME: str = "Vedrix AI"
+    MAIL_FROM_NAME: str = "Autergo AI"
     FRONTEND_URL: str = "http://localhost:5173"
 
     # Judge0 Code Execution
@@ -86,7 +89,7 @@ class Settings(BaseSettings):
     LINKEDIN_CLIENT_SECRET: str = ""
 
     # CORS
-    ALLOWED_ORIGINS: str = ""  # Comma-separated origins, e.g. "http://localhost:5173,https://vedrix.io"
+    ALLOWED_ORIGINS: str = ""  # Comma-separated origins, e.g. "http://localhost:5173,https://app.autergo.example"
 
     # Environment
     ENVIRONMENT: str = "development"  # "development" or "production"

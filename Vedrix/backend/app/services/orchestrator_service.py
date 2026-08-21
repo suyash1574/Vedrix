@@ -62,17 +62,57 @@ WORKFLOW_TRANSITIONS: Dict[str, Dict[str, str]] = {
         "abandon": "assessment_assigned",
     },
     "assessment_review": {
-        "pass": "interview_scheduled",
+        "pass": "interview_scheduled",  # legacy compatibility
+        "pass_to_ai": "ai_interview_scheduled",
         "flag_cheat": "cheat_review",
         "retake": "assessment_assigned",
         "manual_interview": "manual_interview",
         "reject": "decided",
     },
     "cheat_review": {
-        "clear": "interview_scheduled",
+        "clear": "interview_scheduled",  # legacy compatibility
+        "clear_to_ai": "ai_interview_scheduled",
         "confirm_cheat": "decided",
         "retake": "assessment_assigned",
         "manual_interview": "manual_interview",
+    },
+    "ai_interview_scheduled": {
+        "start": "ai_interview_in_progress",
+        "reschedule": "ai_interview_scheduled",
+        "cancel": "assessment_review",
+        "bypass": "human_interview_scheduled",
+        "withdraw": "decided",
+    },
+    "ai_interview_in_progress": {
+        "complete": "ai_interview_review",
+        "abandon": "ai_interview_scheduled",
+        "takeover": "ai_interview_review",
+    },
+    "ai_interview_review": {
+        "approve_human": "human_interview_scheduled",
+        "follow_up": "ai_interview_scheduled",
+        "reject": "decided",
+        "hold": "ai_interview_review",
+        "bypass": "human_interview_scheduled",
+    },
+    "human_interview_scheduled": {
+        "start": "human_interview",
+        "reschedule": "human_interview_scheduled",
+        "cancel": "ai_interview_review",
+        "bypass": "final_review",
+        "withdraw": "decided",
+    },
+    "human_interview": {
+        "submit": "final_review",
+        "reschedule": "human_interview_scheduled",
+        "cancel": "human_interview_scheduled",
+        "bypass": "final_review",
+    },
+    "final_review": {
+        "hire": "decided",
+        "reject": "decided",
+        "withdraw": "decided",
+        "hold": "final_review",
     },
     "scheduled": {
         "start": "in_progress",

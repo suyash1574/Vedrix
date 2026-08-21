@@ -35,6 +35,10 @@ from app.services.email_service import (
     send_report_to_hr,
 )
 from app.models.interview import InterviewSession, DriveInviteToken, JobDrive
+from app.models.candidate_workflow import CandidateWorkflow
+from app.models.hiring_workflow import CandidateApplication
+from app.models.pipeline import HiringPipelineStageRun
+from app.services.hiring_workflow_service import record_workflow_event
 from app.models.profile import HRProfile, StudentProfile
 from app.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +50,60 @@ from app.services.scheduling_service import SchedulingService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _advance_ordered_ai_stage(db, session_record: InterviewSession, report_dict: dict) -> None:
+    """Move a V2 AI session into recruiter review without affecting legacy sessions."""
+    if not session_record.job_drive_id:
+        return
+    application = (await db.execute(select(CandidateApplication).where(
+        CandidateApplication.candidate_id == session_record.candidate_id,
+        CandidateApplication.job_drive_id == session_record.job_drive_id,
+    ))).scalars().first()
+    if not application or not application.workflow_policy_snapshot:
+        return
+    stage = (await db.execute(select(HiringPipelineStageRun).where(
+        HiringPipelineStageRun.application_id == application.id,
+        HiringPipelineStageRun.stage_key == "ai_interview",
+    ).order_by(HiringPipelineStageRun.attempt_number.desc()))).scalars().first()
+    if not stage:
+        return
+    stage.status = "needs_review"
+    stage.outcome = "completed"
+    stage.completed_at = datetime.now(timezone.utc)
+    stage.score = session_record.overall_score
+    stage.confidence = session_record.advisor_confidence
+    stage.related_entity_type = "interview_session"
+    stage.related_entity_id = session_record.id
+    workflow = (await db.execute(select(CandidateWorkflow).where(
+        CandidateWorkflow.candidate_id == session_record.candidate_id,
+        CandidateWorkflow.job_drive_id == session_record.job_drive_id,
+    ))).scalars().first()
+    if workflow and workflow.current_state in {"ai_interview_scheduled", "ai_interview_in_progress"}:
+        previous = workflow.current_state
+        workflow.current_state = "ai_interview_review"
+        workflow.updated_at = datetime.now(timezone.utc)
+        workflow.transition_history = [*(workflow.transition_history or []), {
+            "from_state": previous,
+            "to_state": "ai_interview_review",
+            "trigger": "ai_interview_completed",
+            "actor_id": None,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }]
+        await record_workflow_event(
+            db,
+            action="ai_interview_completed",
+            entity_type="interview_session",
+            job_drive_id=session_record.job_drive_id,
+            candidate_id=session_record.candidate_id,
+            application_id=application.id,
+            entity_id=session_record.id,
+            from_state=previous,
+            to_state="ai_interview_review",
+            stage_key="ai_interview",
+            payload={"overall_score": session_record.overall_score, "report_keys": list(report_dict.keys())[:20]},
+            source="ai_interview_engine",
+        )
 
 
 class ConnectionManager:
@@ -1152,6 +1210,7 @@ async def websocket_endpoint(
                                         rec.advisor_suggested_at = datetime.now(timezone.utc)
                                         rec.advisor_action_taken = final_state.values.get("advisor_action_taken", False)
                                     db.add(rec)
+                                    await _advance_ordered_ai_stage(db, rec, report_dict)
                                     await db.commit()
 
                             # Finalize proctor session: attach all ViolationRecords to evidence_log
