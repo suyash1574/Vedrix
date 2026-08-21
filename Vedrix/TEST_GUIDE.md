@@ -1,4 +1,4 @@
-# Vedrix E2E Test Suite
+# Autergo E2E Test Suite
 
 ## Backend Tests (pytest)
 

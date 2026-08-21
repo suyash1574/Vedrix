@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.candidate_workflow import CandidateWorkflow
+from app.models.hiring_workflow import WorkflowAuditEvent
 from app.models.interview import InterviewSession, JobDrive
 from app.models.trace_entry import TraceEntryCreate
 from app.models.user import User
@@ -37,10 +38,109 @@ logger = logging.getLogger(__name__)
 # ── State Machine Definition ──────────────────────────────────────────────────
 
 WORKFLOW_TRANSITIONS: Dict[str, Dict[str, str]] = {
-    "invited": {"schedule": "scheduled", "withdraw": "decided"},
-    "scheduled": {"start": "in_progress", "cancel": "invited", "withdraw": "decided"},
-    "in_progress": {"complete": "evaluated", "abandon": "invited"},
-    "evaluated": {"shortlist": "shortlisted", "reject": "decided"},
+    # Legacy invite path remains valid for existing drives.
+    "invited": {
+        "apply": "screening",
+        "schedule": "scheduled",
+        "withdraw": "decided",
+    },
+    "screening": {
+        "assign_assessment": "assessment_assigned",
+        "skip_assessment": "interview_scheduled",
+        "manual_interview": "manual_interview",
+        "reject": "decided",
+        "withdraw": "decided",
+    },
+    "assessment_assigned": {
+        "start": "assessment_in_progress",
+        "skip": "interview_scheduled",
+        "cancel": "screening",
+        "withdraw": "decided",
+    },
+    "assessment_in_progress": {
+        "complete": "assessment_review",
+        "abandon": "assessment_assigned",
+    },
+    "assessment_review": {
+        "pass": "interview_scheduled",  # legacy compatibility
+        "pass_to_ai": "ai_interview_scheduled",
+        "flag_cheat": "cheat_review",
+        "retake": "assessment_assigned",
+        "manual_interview": "manual_interview",
+        "reject": "decided",
+    },
+    "cheat_review": {
+        "clear": "interview_scheduled",  # legacy compatibility
+        "clear_to_ai": "ai_interview_scheduled",
+        "confirm_cheat": "decided",
+        "retake": "assessment_assigned",
+        "manual_interview": "manual_interview",
+    },
+    "ai_interview_scheduled": {
+        "start": "ai_interview_in_progress",
+        "reschedule": "ai_interview_scheduled",
+        "cancel": "assessment_review",
+        "bypass": "human_interview_scheduled",
+        "withdraw": "decided",
+    },
+    "ai_interview_in_progress": {
+        "complete": "ai_interview_review",
+        "abandon": "ai_interview_scheduled",
+        "takeover": "ai_interview_review",
+    },
+    "ai_interview_review": {
+        "approve_human": "human_interview_scheduled",
+        "follow_up": "ai_interview_scheduled",
+        "reject": "decided",
+        "hold": "ai_interview_review",
+        "bypass": "human_interview_scheduled",
+    },
+    "human_interview_scheduled": {
+        "start": "human_interview",
+        "reschedule": "human_interview_scheduled",
+        "cancel": "ai_interview_review",
+        "bypass": "final_review",
+        "withdraw": "decided",
+    },
+    "human_interview": {
+        "submit": "final_review",
+        "reschedule": "human_interview_scheduled",
+        "cancel": "human_interview_scheduled",
+        "bypass": "final_review",
+    },
+    "final_review": {
+        "hire": "decided",
+        "reject": "decided",
+        "withdraw": "decided",
+        "hold": "final_review",
+    },
+    "scheduled": {
+        "start": "in_progress",
+        "manual_interview": "manual_interview",
+        "cancel": "invited",
+        "withdraw": "decided",
+    },
+    "interview_scheduled": {
+        "start": "in_progress",
+        "manual_interview": "manual_interview",
+        "cancel": "screening",
+        "withdraw": "decided",
+    },
+    "in_progress": {
+        "complete": "evaluated",
+        "manual_entry": "manual_interview",
+        "abandon": "invited",
+    },
+    "manual_interview": {
+        "submit": "evaluated",
+        "schedule": "interview_scheduled",
+        "reject": "decided",
+    },
+    "evaluated": {
+        "shortlist": "shortlisted",
+        "manual_interview": "manual_interview",
+        "reject": "decided",
+    },
     "shortlisted": {"hire": "decided", "reject": "decided"},
     "decided": {},  # terminal — no transitions without Admin override
 }
@@ -204,6 +304,21 @@ class OrchestratorService:
         if workflow.transition_history is None:
             workflow.transition_history = []
         workflow.transition_history = [*workflow.transition_history, history_entry]
+
+        # Record an immutable business audit event in addition to the agent trace.
+        db.add(WorkflowAuditEvent(
+            job_drive_id=job_drive_id,
+            candidate_id=candidate_id,
+            actor_id=actor_id,
+            actor_type="recruiter" if actor_id is not None else "system",
+            entity_type="candidate_workflow",
+            entity_id=workflow.id,
+            action=f"workflow_transition:{trigger}",
+            from_state=previous_state,
+            to_state=new_state,
+            rationale=f"Transition via trigger '{trigger}'",
+            payload={"admin_override": admin_override},
+        ))
 
         # Log transition as Trace_Entry
         obs = ObservabilityService(db)

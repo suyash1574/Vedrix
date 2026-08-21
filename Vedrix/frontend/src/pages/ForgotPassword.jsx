@@ -38,7 +38,7 @@ const ForgotPassword = () => {
                 <Cpu size={22} />
               </div>
               <span className="text-2xl font-black tracking-tighter text-white">
-                Vedrix <span className="text-purple-400 text-sm align-top ml-1">AI</span>
+                Autergo <span className="text-purple-400 text-sm align-top ml-1">AI</span>
               </span>
             </Link>
           </div>
@@ -63,7 +63,7 @@ const ForgotPassword = () => {
           </div>
 
           <div className="text-slate-500 text-[11px] font-bold uppercase tracking-[0.2em]">
-            Vedrix AI Security Framework
+            Autergo AI Security Framework
           </div>
         </div>
       </div>
@@ -83,7 +83,7 @@ const ForgotPassword = () => {
                 <Cpu size={20} />
               </div>
               <span className="text-xl font-black tracking-tighter text-white">
-                Vedrix <span className="text-purple-400 text-xs align-top ml-1">AI</span>
+                Autergo <span className="text-purple-400 text-xs align-top ml-1">AI</span>
               </span>
             </Link>
           </div>

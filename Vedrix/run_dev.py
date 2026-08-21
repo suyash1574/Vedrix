@@ -45,7 +45,7 @@ def run_dev():
         print(f"Error: Virtual environment not found at {python_exe}")
         return
 
-    print("--- Vedrix Intelligent Launcher ---")
+    print("--- Autergo Intelligent Launcher ---")
     
     # 1. Handle Dynamic Ports
     backend_port = get_free_port(8000)
@@ -82,7 +82,7 @@ def run_dev():
         cwd=frontend_dir
     )
 
-    print(f"\n[SUCCESS] Vedrix is booting up.")
+    print(f"\n[SUCCESS] Autergo is booting up.")
     print(f"   - API: http://localhost:{backend_port}")
     print(f"   - Web: http://localhost:{frontend_port}")
     print(f"--- Press CTRL+C to shutdown both services ---\n")
@@ -97,7 +97,7 @@ def run_dev():
                 print("Frontend process terminated unexpectedly.")
                 break
     except KeyboardInterrupt:
-        print("\nShutting down Vedrix services...")
+        print("\nShutting down Autergo services...")
     finally:
         # Cleanup
         if sys.platform == "win32":

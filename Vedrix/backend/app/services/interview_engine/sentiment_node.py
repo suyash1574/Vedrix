@@ -55,6 +55,27 @@ _hf_pipeline = None
 _hf_lock = asyncio.Lock()
 
 
+async def _persist_empathy_snapshot(session_id: int, metrics: Dict[str, Any]) -> None:
+    """Persist empathy asynchronously so a DB commit never delays the next question."""
+    try:
+        async with async_session() as persist_db:
+            stmt = select(InterviewSession).where(InterviewSession.id == session_id)
+            res = await persist_db.execute(stmt)
+            session_rec = res.scalars().first()
+            if not session_rec:
+                return
+            current_feedback = session_rec.ai_feedback or {}
+            if not isinstance(current_feedback, dict):
+                current_feedback = {"raw": current_feedback}
+            snapshots = current_feedback.setdefault("empathy_snapshots", [])
+            snapshots.append(metrics)
+            session_rec.ai_feedback = current_feedback
+            persist_db.add(session_rec)
+            await persist_db.commit()
+    except Exception as db_err:
+        logger.error("Failed to save empathy snapshot to DB: %s", db_err)
+
+
 async def get_hf_sentiment_pipeline():
     """Lazy loader for the HuggingFace sentiment analysis pipeline."""
     global _hf_pipeline
@@ -183,25 +204,13 @@ class SentimentNode:
         empathy_timeline: List[Dict[str, Any]] = list(state.get("empathy_timeline", []))
         empathy_timeline.append(empathy_metrics)
 
-        # Also persist to InterviewSession.ai_feedback for post-session analysis
+        # Persist to InterviewSession.ai_feedback asynchronously. This is
+        # observability work and must not delay the next candidate question.
         if session_id_str:
             try:
-                session_id = int(session_id_str)
-                stmt = select(InterviewSession).where(InterviewSession.id == session_id)
-                res = await db.execute(stmt)
-                session_rec = res.scalars().first()
-                if session_rec:
-                    current_feedback = session_rec.ai_feedback or {}
-                    if not isinstance(current_feedback, dict):
-                        current_feedback = {"raw": current_feedback}
-
-                    snapshots = current_feedback.setdefault("empathy_snapshots", [])
-                    snapshots.append(empathy_metrics)
-                    session_rec.ai_feedback = current_feedback
-                    db.add(session_rec)
-                    await db.commit()
-            except Exception as db_err:
-                logger.error("Failed to save empathy snapshot to DB: %s", db_err)
+                asyncio.create_task(_persist_empathy_snapshot(int(session_id_str), empathy_metrics))
+            except (TypeError, ValueError):
+                logger.warning("Invalid sentiment session id: %s", session_id_str)
 
         return {
             "empathy_metrics": empathy_metrics,

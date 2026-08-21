@@ -1374,7 +1374,7 @@ const HRDashboard = () => {
             <div className="w-10 h-10 bg-gradient-to-tr from-purple-600 to-indigo-400 rounded-xl flex items-center justify-center text-white shadow-lg shadow-purple-900/30">
               <Briefcase size={20} />
             </div>
-            <span className="text-xl font-bold tracking-tight text-white">Vedrix <span className="text-purple-400">HR</span></span>
+            <span className="text-xl font-bold tracking-tight text-white">Autergo <span className="text-purple-400">HR</span></span>
           </Link>
           <button 
             onClick={() => setIsSidebarOpen(false)} 
@@ -1587,6 +1587,13 @@ const HRDashboard = () => {
                   </div>
 
                   <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => navigate(`/hr/drives/${drive.id}/hiring-workflow`)}
+                      className="flex items-center justify-center space-x-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 px-4 py-4 rounded-2xl font-bold hover:bg-cyan-500/20 transition-all text-sm"
+                    >
+                      <Briefcase size={16} />
+                      <span>Hiring Flow</span>
+                    </button>
                     <button onClick={() => handleGenerateLink(drive.id)}
                       className={`flex-1 flex items-center justify-center space-x-2 py-4 rounded-2xl font-bold transition-all text-sm ${
                         copiedId === drive.id ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-purple-600 text-white hover:bg-purple-500 shadow-lg shadow-purple-900/20'

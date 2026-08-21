@@ -6,6 +6,8 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import InterviewRoom from './pages/InterviewRoom';
+import CandidateApplicationForm from './pages/CandidateApplicationForm';
+import AssessmentRoom from './pages/AssessmentRoom';
 import AdminDashboard from './pages/AdminDashboard';
 import HRDashboard from './pages/HRDashboard';
 import StudentDashboard from './pages/StudentDashboard';
@@ -33,6 +35,7 @@ import ProfilePage from './pages/ProfilePage';
 import CoachingPlanPage from './pages/CoachingPlanPage';
 import HRMatchingDashboard from './pages/HRMatchingDashboard';
 import WorkflowKanban from './pages/WorkflowKanban';
+import HiringWorkflow from './pages/HiringWorkflow';
 import ViolationMonitor from './pages/ViolationMonitor';
 import ObservabilityPanel from './pages/ObservabilityPanel';
 import QAQualityWidget from './pages/QAQualityWidget';
@@ -110,6 +113,10 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+
+            {/* Public recruiter-configured candidate application */}
+            <Route path="/apply/:token" element={<CandidateApplicationForm />} />
+            <Route path="/assessment/:assignmentId" element={<AssessmentRoom />} />
 
             {/* Interview Room (Public-ish/Self-protected) */}
             <Route path="/interview" element={<InterviewRoom />} />
@@ -252,6 +259,13 @@ function App() {
             <Route path="/hr/drives/:driveId/rankings" element={
               <ProtectedRoute allowedRoles={['hr', 'admin']}>
                 <HRMatchingDashboard />
+              </ProtectedRoute>
+            } />
+
+            {/* End-to-end recruiter hiring workflow */}
+            <Route path="/hr/drives/:driveId/hiring-workflow" element={
+              <ProtectedRoute allowedRoles={['hr', 'admin']}>
+                <HiringWorkflow />
               </ProtectedRoute>
             } />
 

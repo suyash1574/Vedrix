@@ -33,6 +33,11 @@ class JobDrive(SQLModel, table=True):
     job_role: str = Field(nullable=False)
     experience_required: Optional[str] = None
     skills_required: Optional[str] = None
+    application_form_config: Optional[Any] = Field(default=None, sa_column=Column(JSON))
+    assessment_policy: Optional[Any] = Field(default=None, sa_column=Column(JSON))
+    workflow_policy: Optional[Any] = Field(default=None, sa_column=Column(JSON))
+    jd_version: int = Field(default=1, nullable=False)
+    jd_parsed_at: Optional[datetime] = None
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -15,9 +15,12 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core import security
 from app.core.security import ALGORITHM
-from app.services.interview_engine.graph import interview_graph
+from app.services.interview_engine import graph as interview_graph_module
 from app.services.interview_engine.nodes import _initialize_skills_to_cover
 from app.services.interview_engine.state import InterviewState
+from app.services.interview_engine.coordination import build_turn_id, coordination_event
+from app.services.interview_engine.response_handling import decide_response, response_notice, response_state_update
+from app.services.interview_engine.timing import TimingProbe, elapsed_ms
 from app.services.voice_service import voice_service
 from app.services.supervisor_service import supervisor_registry, SupervisorObservation
 import time as time_module
@@ -32,6 +35,10 @@ from app.services.email_service import (
     send_report_to_hr,
 )
 from app.models.interview import InterviewSession, DriveInviteToken, JobDrive
+from app.models.candidate_workflow import CandidateWorkflow
+from app.models.hiring_workflow import CandidateApplication
+from app.models.pipeline import HiringPipelineStageRun
+from app.services.hiring_workflow_service import record_workflow_event
 from app.models.profile import HRProfile, StudentProfile
 from app.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +50,60 @@ from app.services.scheduling_service import SchedulingService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def _advance_ordered_ai_stage(db, session_record: InterviewSession, report_dict: dict) -> None:
+    """Move a V2 AI session into recruiter review without affecting legacy sessions."""
+    if not session_record.job_drive_id:
+        return
+    application = (await db.execute(select(CandidateApplication).where(
+        CandidateApplication.candidate_id == session_record.candidate_id,
+        CandidateApplication.job_drive_id == session_record.job_drive_id,
+    ))).scalars().first()
+    if not application or not application.workflow_policy_snapshot:
+        return
+    stage = (await db.execute(select(HiringPipelineStageRun).where(
+        HiringPipelineStageRun.application_id == application.id,
+        HiringPipelineStageRun.stage_key == "ai_interview",
+    ).order_by(HiringPipelineStageRun.attempt_number.desc()))).scalars().first()
+    if not stage:
+        return
+    stage.status = "needs_review"
+    stage.outcome = "completed"
+    stage.completed_at = datetime.now(timezone.utc)
+    stage.score = session_record.overall_score
+    stage.confidence = session_record.advisor_confidence
+    stage.related_entity_type = "interview_session"
+    stage.related_entity_id = session_record.id
+    workflow = (await db.execute(select(CandidateWorkflow).where(
+        CandidateWorkflow.candidate_id == session_record.candidate_id,
+        CandidateWorkflow.job_drive_id == session_record.job_drive_id,
+    ))).scalars().first()
+    if workflow and workflow.current_state in {"ai_interview_scheduled", "ai_interview_in_progress"}:
+        previous = workflow.current_state
+        workflow.current_state = "ai_interview_review"
+        workflow.updated_at = datetime.now(timezone.utc)
+        workflow.transition_history = [*(workflow.transition_history or []), {
+            "from_state": previous,
+            "to_state": "ai_interview_review",
+            "trigger": "ai_interview_completed",
+            "actor_id": None,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }]
+        await record_workflow_event(
+            db,
+            action="ai_interview_completed",
+            entity_type="interview_session",
+            job_drive_id=session_record.job_drive_id,
+            candidate_id=session_record.candidate_id,
+            application_id=application.id,
+            entity_id=session_record.id,
+            from_state=previous,
+            to_state="ai_interview_review",
+            stage_key="ai_interview",
+            payload={"overall_score": session_record.overall_score, "report_keys": list(report_dict.keys())[:20]},
+            source="ai_interview_engine",
+        )
 
 
 class ConnectionManager:
@@ -93,6 +154,54 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+async def _deliver_question(
+    *,
+    session_id: str,
+    question: dict,
+    job_role: Optional[str] = None,
+    is_coding: bool = False,
+    language: str = "python",
+) -> None:
+    """Send text immediately; attach TTS later so audio never blocks turn progress."""
+    question_id = question.get("id") if isinstance(question, dict) else None
+    await manager.send_json({
+        "type": "question",
+        "data": question,
+        "question_id": question_id,
+        "job_role": job_role,
+        "is_coding": is_coding,
+        "language": language,
+    }, session_id)
+
+    async def _audio_task() -> None:
+        try:
+            question_text = question.get("question", "") if isinstance(question, dict) else ""
+            if not question_text:
+                return
+            audio = await asyncio.wait_for(
+                voice_service.speak_text(question_text),
+                timeout=float(getattr(settings, "INTERVIEW_TTS_TIMEOUT_SECONDS", 3.0)),
+            )
+            if audio:
+                await manager.send_json({
+                    "type": "question_audio",
+                    "question_id": question_id,
+                    "audio": audio,
+                }, session_id)
+        except Exception as exc:
+            logger.debug("Question TTS skipped for %s: %s", session_id, exc)
+
+    asyncio.create_task(_audio_task())
+
+
+async def _collect_graph_updates(graph: Any, config: dict) -> list[dict]:
+    """Collect one graph turn under the configured critical-path timeout."""
+    updates: list[dict] = []
+    async for chunk in graph.astream(None, config=config, stream_mode="updates"):
+        updates.append(chunk)
+    return updates
 
 
 def _verify_ws_token(token: str) -> Optional[int]:
@@ -511,6 +620,20 @@ async def websocket_endpoint(
             "interviewer_mode": "ai",
             "hr_instructions": None,
             "last_evaluation": None,
+            "evaluation_history": [],
+            "turn_id": None,
+            "coordination_round_id": None,
+            "coordination_trace": [],
+            "last_candidate_answer": None,
+            "awaiting_candidate_response": True,
+            "last_response_turn_id": None,
+            "last_response_fingerprint": None,
+            "last_response_id": None,
+            "last_response_kind": None,
+            "active_question_id": None,
+            "turn_timing": {},
+            "precision_flags": [],
+            "response_degraded": False,
             "next_question": None,
             "code_snippet": None,
             "code_language": None,
@@ -561,8 +684,8 @@ async def websocket_endpoint(
         try:
             current_values = None
             try:
-                async with asyncio.timeout(60):  # 60 second timeout for initial question
-                    async for event in interview_graph.astream(initial_state, config=config, stream_mode="values"):
+                async with asyncio.timeout(float(getattr(settings, "INTERVIEW_TURN_TIMEOUT_SECONDS", 20.0))):
+                    async for event in interview_graph_module.interview_graph.astream(initial_state, config=config, stream_mode="values"):
                         if event.get("next_question"):
                             current_values = event
             except asyncio.TimeoutError:
@@ -572,27 +695,18 @@ async def websocket_endpoint(
                 raise ValueError("AI engine failed to generate opening question")
 
             q = current_values["next_question"]
+            await interview_graph_module.interview_graph.aupdate_state(config, {
+                "active_question_id": str(q.get("id")) if isinstance(q, dict) and q.get("id") is not None else None,
+                "awaiting_candidate_response": True,
+            })
 
-            # Generate TTS audio for the question
-            audio_base64 = ""
-            try:
-                question_text = q.get("question", "") if isinstance(q, dict) else ""
-                if question_text:
-                    audio_base64 = await voice_service.speak_text(question_text)
-            except Exception as e:
-                logger.warning(f"TTS generation failed: {e}")
-
-            response_data = {
-                "type": "question",
-                "data": q,
-                "job_role": job_role,
-                "is_coding": current_values.get("is_coding_mode", False),
-                "language": current_values.get("code_language", "python"),
-            }
-            if audio_base64:
-                response_data["audio"] = audio_base64
-
-            await manager.send_json(response_data, session_id)
+            await _deliver_question(
+                session_id=session_id,
+                question=q,
+                job_role=job_role,
+                is_coding=current_values.get("is_coding_mode", False),
+                language=current_values.get("code_language", "python"),
+            )
         except Exception as e:
             logger.error(f"Interview start failed [{session_id}]: {e}")
             await manager.send_json({"type": "error", "data": f"Engine Error: {str(e)}"}, session_id)
@@ -615,15 +729,31 @@ async def websocket_endpoint(
             user_answer = ""
             user_code = ""
             typing_duration = None
+            turn_probe = TimingProbe()
 
             if "text" in message:
                 try:
                     payload = json.loads(message["text"])
-                    if payload.get("type") == "answer":
-                        user_answer = payload.get("data", "")
-                        typing_duration = payload.get("duration_seconds")
-                    elif payload.get("type") == "code":
-                        user_code = payload.get("data", "")
+                    if payload.get("type") in ("answer", "code"):
+                        current_state = await interview_graph_module.interview_graph.aget_state(config)
+                        current_values = current_state.values if current_state else {}
+                        response_decision = decide_response(payload, current_values)
+                        if not response_decision.accepted:
+                            await manager.send_json({
+                                "type": "response_rejected",
+                                "data": response_notice(response_decision),
+                            }, session_id)
+                            continue
+
+                        await manager.send_json({
+                            "type": "response_ack",
+                            "data": response_notice(response_decision),
+                        }, session_id)
+                        if response_decision.kind == "answer":
+                            user_answer = response_decision.content
+                            typing_duration = payload.get("duration_seconds")
+                        else:
+                            user_code = response_decision.content
                     elif payload.get("type") == "proctor_event":
                         # Route browser events to ProctorService.handle_browser_event()
                         # Message format: {"type": "proctor_event", "event": "tab_switch"|"paste"|"keystroke", ...}
@@ -705,7 +835,7 @@ async def websocket_endpoint(
                                 "data": closing_msg,
                             }, session_id)
                         # Mark interview complete with advisor action
-                        await interview_graph.aupdate_state(config, {
+                        await interview_graph_module.interview_graph.aupdate_state(config, {
                             "interview_complete": True,
                             "completion_reason": "Interviewer closed the interview",
                             "advisor_action_taken": True,
@@ -720,7 +850,7 @@ async def websocket_endpoint(
 
                         if action == "override_difficulty":
                             new_diff = control.get("difficulty", "medium")
-                            await interview_graph.aupdate_state(config, {
+                            await interview_graph_module.interview_graph.aupdate_state(config, {
                                 "difficulty": new_diff,
                                 "supervisor_observations": [{
                                     "type": "manual_override",
@@ -734,7 +864,7 @@ async def websocket_endpoint(
 
                         elif action == "override_phase":
                             new_phase = control.get("phase", "technical")
-                            await interview_graph.aupdate_state(config, {
+                            await interview_graph_module.interview_graph.aupdate_state(config, {
                                 "current_phase": new_phase,
                                 "phase_transition": True,
                                 "previous_phase": None,
@@ -750,7 +880,7 @@ async def websocket_endpoint(
 
                         elif action == "set_control_mode":
                             mode = control.get("mode", "suggest")
-                            await interview_graph.aupdate_state(config, {
+                            await interview_graph_module.interview_graph.aupdate_state(config, {
                                 "supervisor_mode": mode,
                                 "supervisor_observations": [{
                                     "type": "control_mode_change",
@@ -764,7 +894,7 @@ async def websocket_endpoint(
                             await manager.send_json({"type": "status", "data": f"Supervisor mode: {mode}"}, session_id)
 
                         elif action == "force_close":
-                            await interview_graph.aupdate_state(config, {
+                            await interview_graph_module.interview_graph.aupdate_state(config, {
                                 "interview_complete": True,
                                 "completion_reason": "Supervisor/admin force-closed the interview",
                                 "advisor_action_taken": True,
@@ -783,18 +913,18 @@ async def websocket_endpoint(
 
                     elif payload.get("type") == "hr_whisper":
                         whisper_text = payload.get("data", "")
-                        await interview_graph.aupdate_state(config, {"hr_whisper_instructions": whisper_text})
+                        await interview_graph_module.interview_graph.aupdate_state(config, {"hr_whisper_instructions": whisper_text})
                         await manager.send_json({"type": "status", "data": "Whisper queued for next turn."}, session_id)
                         continue
 
                     elif payload.get("type") == "copilot_request":
                         current_code = payload.get("data", "")
                         await manager.send_json({"type": "status", "data": "Co-Pilot: Analyzing your workspace..."}, session_id)
-                        await interview_graph.aupdate_state(config, {
+                        await interview_graph_module.interview_graph.aupdate_state(config, {
                             "copilot_request_pending": True,
                             "code_snippet": current_code
                         })
-                        async for chunk in interview_graph.astream(None, config=config, stream_mode="updates"):
+                        async for chunk in interview_graph_module.interview_graph.astream(None, config=config, stream_mode="updates"):
                             for node_name, output in chunk.items():
                                 if node_name == "code_copilot" and output.get("copilot_suggestions"):
                                     await manager.send_json({
@@ -813,6 +943,20 @@ async def websocket_endpoint(
                 if not user_answer:
                     await manager.send_json({"type": "error", "data": "Could not understand audio. Please try again."}, session_id)
                     continue
+                current_state = await interview_graph_module.interview_graph.aget_state(config)
+                current_values = current_state.values if current_state else {}
+                response_decision = decide_response({"type": "answer", "data": user_answer}, current_values)
+                if not response_decision.accepted:
+                    await manager.send_json({
+                        "type": "response_rejected",
+                        "data": response_notice(response_decision),
+                    }, session_id)
+                    continue
+                user_answer = response_decision.content
+                await manager.send_json({
+                    "type": "response_ack",
+                    "data": response_notice(response_decision),
+                }, session_id)
                 await manager.send_json({"type": "status", "data": f'Understood: "{user_answer}"'}, session_id)
 
             if user_answer or user_code:
@@ -821,8 +965,7 @@ async def websocket_endpoint(
                     if user_answer and db_session_id:
                         if not typing_duration:
                             try:
-                                state_vals = await interview_graph.aget_state(config)
-                                q_start = state_vals.values.get("question_start_epoch")
+                                q_start = current_values.get("question_start_epoch")
                                 if q_start:
                                     typing_duration = time.time() - q_start
                             except Exception as state_err:
@@ -838,34 +981,60 @@ async def websocket_endpoint(
                                     db=db
                                 )
 
-                    # Query ChromaDB context asynchronously
+                    # Query RAG context under a short optional budget. The
+                    # answer itself remains usable when retrieval is slow.
                     rag_context = ""
+                    rag_started = time_module.perf_counter()
                     if db_session_id:
                         try:
                             query_str = user_answer if user_answer else user_code
-                            rag_context = await asyncio.to_thread(
-                                rag_service.query_context,
-                                session_id=str(db_session_id),
-                                query=query_str[:300]
-                            )
+                            async with asyncio.timeout(float(getattr(settings, "INTERVIEW_RAG_TIMEOUT_SECONDS", 0.8))):
+                                rag_context = await asyncio.to_thread(
+                                    rag_service.query_context,
+                                    session_id=str(db_session_id),
+                                    query=query_str[:300]
+                                )
                         except Exception as e:
-                            logger.warning(f"Failed to query RAG context: {e}")
+                            logger.debug(f"RAG context skipped: {e}")
+                    turn_probe.mark("rag_context", rag_started)
                     if not rag_context:
                         rag_context = rag_seed_context[:2500] if rag_seed_context else ""
 
+                    state_values = current_values if isinstance(current_values, dict) else {}
+                    turn_seed = {
+                        "current_question_index": state_values.get("current_question_index", 0),
+                        "total_responses": state_values.get("total_responses", 0),
+                        "messages": state_values.get("messages", []),
+                    }
+                    turn_id = build_turn_id(turn_seed)
+                    coordination_state = {**turn_seed, "turn_id": turn_id, "coordination_round_id": f"{turn_id}:debate"}
+                    turn_update = {
+                        **response_state_update(response_decision),
+                        "turn_id": turn_id,
+                        "coordination_round_id": f"{turn_id}:debate",
+                        "last_candidate_answer": user_answer or "[Code Submitted]",
+                        "coordination_trace": [
+                            coordination_event(
+                                agent="orchestrator",
+                                event="candidate_turn_started",
+                                state=coordination_state,
+                                details={"has_code": bool(user_code), "has_text": bool(user_answer)},
+                            )
+                        ],
+                    }
                     update = (
-                        {"code_snippet": user_code, "messages": [{"role": "user", "content": "[Code Submitted]"}, {"role": "system", "content": "[Evaluation debate in progress...]"}], "rag_context": rag_context}
+                        {**turn_update, "code_snippet": user_code, "messages": [{"role": "user", "content": "[Code Submitted]"}, {"role": "system", "content": "[Evaluation debate in progress...]"}], "rag_context": rag_context}
                         if user_code
-                        else {"messages": [{"role": "user", "content": user_answer}], "rag_context": rag_context}
+                        else {**turn_update, "messages": [{"role": "user", "content": user_answer}], "rag_context": rag_context}
                     )
 
                     # Execute code via Judge0 before AI evaluation
                     if user_code:
+                        code_started = time_module.perf_counter()
                         await manager.send_json({"type": "status", "data": "Judge0: Executing code..."}, session_id)
                         
                         # Audit #17: Fetch current state to get correct code_language
-                        current_state_vals = await interview_graph.aget_state(config)
-                        current_lang = current_state_vals.values.get("code_language") or "python"
+                        current_lang = state_values.get("code_language") or "python"
                         
                         exec_result = await code_execution_service.execute(
                             source_code=user_code,
@@ -879,11 +1048,26 @@ async def websocket_endpoint(
                             f"Output: {exec_result['stdout'][:500]}\n"
                             f"Errors: {exec_result['stderr'][:300]}"
                         )
-                        update = {"code_snippet": user_code, "messages": [{"role": "user", "content": enriched_content}], "rag_context": rag_context}
-                    await interview_graph.aupdate_state(config, update)
+                        update = {**turn_update, "code_snippet": user_code, "last_candidate_answer": enriched_content, "messages": [{"role": "user", "content": enriched_content}], "rag_context": rag_context}
+                        turn_probe.mark("code_execution", code_started)
+                    graph_started = time_module.perf_counter()
+                    await interview_graph_module.interview_graph.aupdate_state(config, update)
 
-                    async for chunk in interview_graph.astream(None, config=config, stream_mode="updates"):
+                    graph_chunks = await asyncio.wait_for(
+                        _collect_graph_updates(interview_graph_module.interview_graph, config),
+                        timeout=float(getattr(settings, "INTERVIEW_TURN_TIMEOUT_SECONDS", 20.0)),
+                    )
+                    for chunk in graph_chunks:
                         for node_name, output in chunk.items():
+                            if output.get("coordination_trace"):
+                                await manager.send_json({
+                                    "type": "agent_coordination_update",
+                                    "data": {
+                                        "node": node_name,
+                                        "events": output["coordination_trace"],
+                                        "round": output.get("debate_rounds"),
+                                    },
+                                }, session_id)
                             if node_name in ("evaluate_answer", "evaluate_code", "consensus_synthesizer"):
                                 await manager.send_json({"type": "status", "data": "AI: Evaluating response..."}, session_id)
                                 if output.get("metrics"):
@@ -903,27 +1087,42 @@ async def websocket_endpoint(
                                 q = output["next_question"]
                                 all_questions.append(q)
 
-                                # Generate TTS audio for the question
-                                audio_base64 = ""
-                                try:
-                                    question_text = q.get("question", "") if isinstance(q, dict) else ""
-                                    if question_text:
-                                        audio_base64 = await voice_service.speak_text(question_text)
-                                except Exception as e:
-                                    logger.warning(f"TTS generation failed: {e}")
+                                await interview_graph_module.interview_graph.aupdate_state(config, {
+                                    "active_question_id": str(q.get("id")) if isinstance(q, dict) and q.get("id") is not None else None,
+                                    "awaiting_candidate_response": True,
+                                })
+                                await _deliver_question(
+                                    session_id=session_id,
+                                    question=q,
+                                    job_role=job_role,
+                                    is_coding=output.get("is_coding_mode", False),
+                                    language=output.get("code_language", "python"),
+                                )
 
-                                response_data = {
-                                    "type": "question",
-                                    "data": q,
-                                    "is_coding": output.get("is_coding_mode", False),
-                                    "language": output.get("code_language", "python"),
-                                }
-                                if audio_base64:
-                                    response_data["audio"] = audio_base64
-
-                                await manager.send_json(response_data, session_id)
-
-                    final_state = await interview_graph.aget_state(config)
+                    turn_probe.mark("graph_execution", graph_started)
+                    final_state = await interview_graph_module.interview_graph.aget_state(config)
+                    precision_flags = []
+                    final_values = final_state.values if final_state else {}
+                    if not rag_context:
+                        precision_flags.append("rag_context_unavailable")
+                    evaluation = final_values.get("last_evaluation") if isinstance(final_values, dict) else None
+                    if isinstance(evaluation, dict):
+                        confidence = evaluation.get("confidence")
+                        if confidence is not None and float(confidence) < 0.55:
+                            precision_flags.append("low_confidence_evaluation")
+                        if not evaluation.get("evidence"):
+                            precision_flags.append("evaluation_without_evidence")
+                    timing_snapshot = turn_probe.snapshot()
+                    await interview_graph_module.interview_graph.aupdate_state(config, {
+                        "turn_timing": timing_snapshot,
+                        "precision_flags": precision_flags,
+                        "response_degraded": bool(precision_flags),
+                    })
+                    await manager.send_json({
+                        "type": "turn_timing",
+                        "data": {**timing_snapshot, "precision_flags": precision_flags},
+                    }, session_id)
+                    final_state = await interview_graph_module.interview_graph.aget_state(config)
                     if final_state and final_state.values:
                         await manager.broadcast_to_hr({
                             "type": "state_sync",
@@ -935,6 +1134,11 @@ async def websocket_endpoint(
                                 "topic_scores": final_state.values.get("topic_scores", {}),
                                 "current_question": final_state.values.get("messages", [])[-1]["content"] if final_state.values.get("messages") else "",
                                 "supervisor_mode": final_state.values.get("supervisor_mode", "suggest"),
+                                "coordination_round": final_state.values.get("debate_rounds"),
+                                "coordination_trace": (final_state.values.get("coordination_trace", []) or [])[-20:],
+                                "turn_timing": final_state.values.get("turn_timing", {}),
+                                "precision_flags": final_state.values.get("precision_flags", []),
+                                "response_degraded": final_state.values.get("response_degraded", False),
                             }
                         }, session_id)
 
@@ -974,7 +1178,11 @@ async def websocket_endpoint(
                         await manager.send_json({"type": "status", "data": "Assessment complete. Generating report..."}, session_id)
 
                         final_history = final_state.values.get("messages", [])
-                        report = await evaluation_service.generate_final_report(job_role, final_history)
+                        report = await evaluation_service.generate_final_report(
+                            job_role,
+                            final_history,
+                            evaluation_history=final_state.values.get("evaluation_history", []),
+                        )
                         report_dict = report.model_dump()
 
                         # Persist session (#5 duration, #18 questions)
@@ -1002,6 +1210,7 @@ async def websocket_endpoint(
                                         rec.advisor_suggested_at = datetime.now(timezone.utc)
                                         rec.advisor_action_taken = final_state.values.get("advisor_action_taken", False)
                                     db.add(rec)
+                                    await _advance_ordered_ai_stage(db, rec, report_dict)
                                     await db.commit()
 
                             # Finalize proctor session: attach all ViolationRecords to evidence_log
@@ -1150,7 +1359,7 @@ async def websocket_endpoint(
                         
                         # Try to capture whatever responses were made before disconnect
                         try:
-                            final_state = await interview_graph.aget_state(config)
+                            final_state = await interview_graph_module.interview_graph.aget_state(config)
                             if final_state and final_state.values:
                                 rec.responses = final_state.values.get("messages", [])
                                 rec.skill_matrix = final_state.values.get("topic_scores", {})
@@ -1181,7 +1390,7 @@ async def send_hr_instruction(
     current_hr: User = Depends(deps.get_current_hr),  # #14: auth required
 ):
     config = {"configurable": {"thread_id": session_id}}
-    await interview_graph.aupdate_state(config, {
+    await interview_graph_module.interview_graph.aupdate_state(config, {
         "hr_instructions": instruction.get("text", ""),
         "hr_whisper_instructions": instruction.get("text", "")
     })
@@ -1488,7 +1697,7 @@ async def hr_websocket_endpoint(
     try:
         # Send initial state sync to HR observer
         try:
-            state = await interview_graph.aget_state(config)
+            state = await interview_graph_module.interview_graph.aget_state(config)
             if state and state.values:
                 await websocket.send_json({
                     "type": "state_sync",
@@ -1497,6 +1706,7 @@ async def hr_websocket_endpoint(
                         "empathy_metrics": state.values.get("empathy_metrics", {}),
                         "copilot_suggestions": state.values.get("copilot_suggestions", []),
                         "debate_rounds": state.values.get("debate_rounds", {}),
+                        "coordination_trace": (state.values.get("coordination_trace", []) or [])[-20:],
                         "topic_scores": state.values.get("topic_scores", {}),
                         "current_question": state.values.get("messages", [])[-1]["content"] if state.values.get("messages") else "",
                         "supervisor_mode": state.values.get("supervisor_mode", "suggest"),
@@ -1512,7 +1722,7 @@ async def hr_websocket_endpoint(
                 payload = json.loads(data)
                 if payload.get("type") == "hr_whisper":
                     whisper_text = payload.get("data", "")
-                    await interview_graph.aupdate_state(config, {
+                    await interview_graph_module.interview_graph.aupdate_state(config, {
                         "hr_instructions": whisper_text,
                         "hr_whisper_instructions": whisper_text
                     })
@@ -1521,7 +1731,7 @@ async def hr_websocket_endpoint(
                     action = payload.get("action")
                     if action == "set_mode":
                         mode = payload.get("mode")
-                        await interview_graph.aupdate_state(config, {
+                        await interview_graph_module.interview_graph.aupdate_state(config, {
                             "supervisor_mode": mode,
                             "supervisor_observations": [{
                                 "type": "control_mode_change",
@@ -1535,7 +1745,7 @@ async def hr_websocket_endpoint(
                         await manager.send_json({"type": "supervisor_mode", "mode": mode}, session_id)
                         await manager.send_json({"type": "status", "data": f"Supervisor mode: {mode}"}, session_id)
                     elif action == "force_close":
-                        await interview_graph.aupdate_state(config, {
+                        await interview_graph_module.interview_graph.aupdate_state(config, {
                             "interview_complete": True,
                             "completion_reason": "HR force-closed the interview",
                             "advisor_action_taken": True,

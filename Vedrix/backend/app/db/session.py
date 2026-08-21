@@ -1,90 +1,64 @@
-"""
-Secure database session configuration.
-Includes SSL/TLS, connection pooling, and audit logging.
-"""
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+"""PostgreSQL-only async database session configuration."""
+
+from __future__ import annotations
+
+import logging
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import AsyncAdaptedQueuePool
-from app.core.config import settings
 from sqlmodel import SQLModel
-import logging
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# ── Connection Pool Settings ───────────────────────────────────────────────────
-# These provide protection against connection exhaustion and abuse
-pool_config = {
-    "poolclass": AsyncAdaptedQueuePool,
-    "pool_size": 10,           # Base connections
-    "max_overflow": 20,        # Additional connections under load
-    "pool_timeout": 30,        # Wait time for available connection
-    "pool_recycle": 1800,      # Recycle connections after 30 min
-    "pool_pre_ping": True,     # Verify connection before use
-}
+if not settings.DATABASE_URL.startswith("postgresql+asyncpg://"):
+    raise ValueError("Vedrix requires a PostgreSQL asyncpg DATABASE_URL")
 
-# ── SSL/TLS Configuration ───────────────────────────────────────────────────────
-# PostgreSQL SSL settings for encrypted data transit.
-# Local Postgres (CI service container, docker-compose dev) is plaintext;
-# production must set DB_SSL_MODE=require (or verify-full) via env var.
 connect_args = {}
+if settings.DB_SSL_MODE in {"require", "verify-full"}:
+    # asyncpg accepts the boolean SSL switch through SQLAlchemy connect_args.
+    # Certificate verification should be configured by the deployment platform
+    # when verify-full is required.
+    connect_args["ssl"] = True
 
-if settings.DATABASE_URL.startswith("postgresql"):
-    ssl_mode = getattr(settings, "DB_SSL_MODE", None)
-    if ssl_mode and ssl_mode != "disable":
-        connect_args["sslmode"] = ssl_mode
-elif settings.DATABASE_URL.startswith("sqlite"):
-    # SQLite-specific security settings
-    connect_args = {
-        "check_same_thread": False,
-    }
-
-# ── Create Async Engine with Security Settings ───────────────────────────────────
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=False,  # Set to True for query debugging (never in production!)
+    echo=False,
     future=True,
     connect_args=connect_args,
-    # Apply pool configuration
-    poolclass=pool_config.get("poolclass"),
-    pool_size=pool_config.get("pool_size"),
-    max_overflow=pool_config.get("max_overflow"),
-    pool_timeout=pool_config.get("pool_timeout"),
-    pool_recycle=pool_config.get("pool_recycle"),
-    pool_pre_ping=pool_config.get("pool_pre_ping"),
+    poolclass=AsyncAdaptedQueuePool,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_timeout=settings.DB_POOL_TIMEOUT,
+    pool_recycle=settings.DB_POOL_RECYCLE,
+    pool_pre_ping=settings.DB_POOL_PRE_PING,
 )
 
-# ── Session Factory ───────────────────────────────────────────────────────────────
-async_session = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
-)
+async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
-async def init_db():
-    """Initialize database - create tables if needed."""
-    async with engine.begin() as conn:
-        # Import all models to ensure they are registered
-        from app.models import (
-            User, StudentProfile, HRProfile, JobDrive,
-            InterviewSession, DriveInviteToken, ScenarioTemplate, AuditLog,
-            CandidateFeedback, HRFeedback, UserConsent, TraceEntry
-        )
-        await conn.run_sync(SQLModel.metadata.create_all)
-    logger.info("Database initialized successfully")
+async def init_db() -> None:
+    """Verify PostgreSQL connectivity; schema changes are owned by Alembic."""
+    if not await check_db_connection():
+        raise RuntimeError("PostgreSQL is unavailable; refusing to start Vedrix")
+    logger.info("PostgreSQL connectivity verified; schema is managed by Alembic")
 
 
-async def get_session() -> AsyncSession:
-    """Get database session with automatic cleanup."""
+async def get_session():
+    """Yield a request-scoped async PostgreSQL session."""
     async with async_session() as session:
         yield session
 
 
-# ── Database Health Check ───────────────────────────────────────────────────────
 async def check_db_connection() -> bool:
-    """Verify database connectivity."""
+    """Verify that the configured PostgreSQL database accepts queries."""
     try:
         async with engine.connect() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
         return True
-    except Exception as e:
-        logger.error(f"Database connection check failed: {e}")
+    except Exception:
+        logger.exception("PostgreSQL health check failed")
         return False

@@ -5,7 +5,8 @@ from fastapi.responses import JSONResponse
 from app.api.v1 import api_router
 from app.core.config import settings
 from app.db.session import init_db, get_session
-from app.services.cache_service import init_cache, close_cache
+from app.services.interview_engine.graph import initialize_interview_graph, close_interview_graph
+from app.services.cache_service import init_cache, close_cache, cache_service
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -30,20 +31,22 @@ async def lifespan(app: FastAPI):
     # Startup logic
     await init_db()
     await init_cache()
+    await initialize_interview_graph()
     # Phase 1.4: Start session cleanup service
     await session_cleanup.start_cleanup_loop(interval_seconds=300)  # Every 5 minutes
     # Orchestrator: Start scheduled workflow checks (every 15 minutes)
     await orchestrator_scheduler.start(interval_seconds=900)
-    logger.info("Vedrix backend started — DB, cache, and session cleanup initialized")
+    logger.info("Autergo backend started — DB, cache, and session cleanup initialized")
     yield
     # Shutdown logic
     await orchestrator_scheduler.stop()
     await session_cleanup.stop_cleanup_loop()
     await close_cache()
-    logger.info("Vedrix backend shutting down")
+    await close_interview_graph()
+    logger.info("Autergo backend shutting down")
 
 app = FastAPI(
-    title="Vedrix AI Interview System",
+    title="Autergo AI Interview System",
     description="Modern AI-powered interview platform",
     version="1.0.0",
     lifespan=lifespan,
@@ -129,6 +132,7 @@ async def readiness_check():
     """Detailed health check - includes database connectivity"""
     checks = {
         "database": "unhealthy",
+        "redis": "unhealthy",
         "service": "healthy",
     }
 
@@ -142,7 +146,13 @@ async def readiness_check():
         logger.error(f"Database health check failed: {e}")
         checks["database"] = "unhealthy"
 
-    overall = "healthy" if checks["database"] == "healthy" else "degraded"
+    try:
+        checks["redis"] = "healthy" if await cache_service.health_check() else "unhealthy"
+    except Exception:
+        checks["redis"] = "unhealthy"
+
+    dependencies_healthy = checks["database"] == "healthy" and checks["redis"] == "healthy"
+    overall = "healthy" if dependencies_healthy else "degraded"
 
     return JSONResponse(
         status_code=200 if overall == "healthy" else 503,
@@ -156,4 +166,4 @@ async def readiness_check():
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to Vedrix API", "status": "online"}
+    return {"message": "Welcome to Autergo API", "status": "online"}

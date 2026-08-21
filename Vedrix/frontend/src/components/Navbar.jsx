@@ -72,12 +72,12 @@ const Navbar = () => {
           <Link
             to="/home"
             className="flex min-w-0 items-center space-x-3 cursor-pointer group"
-            aria-label="Vedrix AI - Home"
+            aria-label="Autergo AI - Home"
           >
             <div className="w-10 h-10 shrink-0 bg-gradient-to-tr from-purple-600 via-indigo-500 to-cyan-400 rounded-xl flex items-center justify-center text-white shadow-lg shadow-purple-900/20 group-hover:scale-110 transition-all">
               <Cpu size={22} />
             </div>
-            <span className="truncate text-xl sm:text-2xl font-black tracking-tighter text-white">Vedrix <span className="text-purple-400 text-sm align-top ml-1">AI</span></span>
+            <span className="truncate text-xl sm:text-2xl font-black tracking-tighter text-white">Autergo <span className="text-purple-400 text-sm align-top ml-1">AI</span></span>
           </Link>
 
           {/* Desktop Nav */}

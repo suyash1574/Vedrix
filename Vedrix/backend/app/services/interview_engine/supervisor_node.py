@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from .state import InterviewState
+from .coordination import coordination_event
 from ..supervisor_service import (
     analyze_difficulty,
     analyze_duration,
@@ -267,6 +268,14 @@ def supervisor_node(state: InterviewState) -> Dict[str, Any]:
 
     output["supervisor_observations"] = observations
     output["supervisor_last_action"] = last_action_dict
+    output["coordination_trace"] = [
+        coordination_event(
+            agent="supervisor",
+            event="analysis_completed",
+            state=state,
+            details={"action": last_action_dict, "control_mode": control_mode, "observation_count": len(observations)},
+        )
+    ]
 
     # Add the summary as the latest observation for WebSocket forwarding
     output["_supervisor_summary"] = observation_summary

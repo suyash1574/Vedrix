@@ -39,6 +39,18 @@ class CacheService:
             self._connected = False
             logger.info("Redis connection closed")
 
+    async def health_check(self) -> bool:
+        """Return whether Redis is reachable for shared production state."""
+        if not self._redis:
+            return False
+        try:
+            await self._redis.ping()
+            self._connected = True
+            return True
+        except Exception:
+            self._connected = False
+            return False
+
     async def get(self, key: str) -> Optional[Any]:
         """Get value from cache."""
         if not self._connected or not self._redis:

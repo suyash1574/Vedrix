@@ -41,6 +41,7 @@ from app.services.interview_engine.react import (
     parse_react_output,
 )
 from app.services.interview_engine.state import InterviewState
+from app.services.interview_engine.coordination import coordination_event, supervisor_action_update
 from app.services.observability_service import trace_agent_action
 
 logger = logging.getLogger(__name__)
@@ -502,31 +503,44 @@ class ReActSupervisorAgent:
         if action not in self.ACTIONS:
             action = "no_action"
 
-        return {
-            "supervisor_last_action": {
-                "action_type": action,
-                "confidence": float(final.get("confidence", 0.0) or 0.0),
-                "reason": final.get("reason", ""),
-                "reason_category": final.get("reason_category", "no_action"),
-                "payload": {"new_difficulty": final.get("new_difficulty")} if final.get("new_difficulty") else {},
-            },
-            "supervisor_observations": [
-                {
-                    "type": "react_supervisor_action",
-                    "subtype": action,
-                    "severity": "warning" if action != "no_action" else "info",
-                    "message": final.get("reason", ""),
-                    "details": analysis_payload,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            ],
-            "_supervisor_summary": {
-                "difficulty": analysis_payload["difficulty"],
-                "duration": analysis_payload["duration"],
-                "performance": analysis_payload["performance"],
-                "action": final,
-            },
+        action_payload = {"new_difficulty": final.get("new_difficulty")} if final.get("new_difficulty") else {}
+        action_dict = {
+            "action_type": action,
+            "confidence": float(final.get("confidence", 0.0) or 0.0),
+            "reason": final.get("reason", ""),
+            "reason_category": final.get("reason_category", "no_action"),
+            "payload": action_payload,
         }
+        update = supervisor_action_update(
+            state=state,
+            action=action_dict,
+            control_mode=state.get("supervisor_mode", "suggest"),
+        )
+        update["supervisor_observations"] = [
+            {
+                "type": "react_supervisor_action",
+                "subtype": action,
+                "severity": "warning" if action != "no_action" else "info",
+                "message": final.get("reason", ""),
+                "details": analysis_payload,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ]
+        update["coordination_trace"].append(
+            coordination_event(
+                agent="react_supervisor",
+                event="analysis_completed",
+                state=state,
+                details={"action": action, "control_mode": state.get("supervisor_mode", "suggest")},
+            )
+        )
+        update["_supervisor_summary"] = {
+            "difficulty": analysis_payload["difficulty"],
+            "duration": analysis_payload["duration"],
+            "performance": analysis_payload["performance"],
+            "action": update.get("supervisor_last_action"),
+        }
+        return update
 
 
 # ─────────────────────────────────────────────────────────────────────────────

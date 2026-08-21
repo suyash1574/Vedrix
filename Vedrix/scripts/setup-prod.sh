@@ -1,10 +1,10 @@
 #!/bin/bash
-# Production setup script for Vedrix
+# Production setup script for Autergo
 # Run this once on a fresh server
 
 set -e
 
-echo "=== Vedrix Production Setup ==="
+echo "=== Autergo Production Setup ==="
 echo ""
 
 # Check if running as root
@@ -56,11 +56,22 @@ if [ ! -f backend/.env ]; then
     echo "Please edit backend/.env with your configuration!"
 fi
 
+# Validate required production configuration before starting any service.
+if grep -q "CHANGE_ME_IN_PRODUCTION\|change-me-in-the-deployment-secret-manager\|your-production-secret" backend/.env; then
+    echo "Set a real SECRET_KEY and CSRF_SECRET in backend/.env before starting production." >&2
+    exit 1
+fi
+if ! grep -q '^DATABASE_URL=postgresql' backend/.env; then
+    echo "DATABASE_URL must point to PostgreSQL in backend/.env." >&2
+    exit 1
+fi
+
 # Set permissions
 echo "Setting permissions..."
+chmod 600 backend/.env
 chown -R vedrix:vedrix /opt/vedrix
 
-# Start services
+# Start services. The Compose migration job must complete before backend replicas start.
 echo "Starting services..."
 docker-compose -f docker-compose.prod.yml up -d
 

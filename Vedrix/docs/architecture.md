@@ -1,12 +1,12 @@
-# Vedrix Architecture Overview
+# Autergo Architecture Overview
 
-**Audience:** Senior engineers, architects, and technical leads evaluating or contributing to the Vedrix AI Interview System.
+**Audience:** Senior engineers, architects, and technical leads evaluating or contributing to the Autergo AI Interview System.
 
 ---
 
 ## System Context
 
-Vedrix is a dual-sided AI interview platform serving **candidates (B2C)** and **recruiters (B2B)**. It provides realistic, AI-driven interview experiences with automated evaluation, skill gap analysis, and detailed reporting.
+Autergo is a dual-sided AI interview platform serving **candidates (B2C)** and **recruiters (B2B)**. It provides realistic, AI-driven interview experiences with automated evaluation, skill gap analysis, and detailed reporting.
 
 ### Core Capabilities
 

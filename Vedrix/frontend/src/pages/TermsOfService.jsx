@@ -9,7 +9,7 @@ const TermsOfService = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">1. Acceptance of Terms</h2>
             <p className="text-slate-300 leading-relaxed">
-              By accessing or using the Vedrix AI Interview System ("Service"), you agree to be bound
+              By accessing or using the Autergo AI Interview System ("Service"), you agree to be bound
               by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Service.
             </p>
           </section>
@@ -17,7 +17,7 @@ const TermsOfService = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">2. Description of Service</h2>
             <p className="text-slate-300 leading-relaxed">
-              Vedrix provides an AI-powered interview platform that enables:
+              Autergo provides an AI-powered interview platform that enables:
             </p>
             <ul className="list-disc list-inside text-slate-300 space-y-2 ml-4">
               <li>AI-conducted technical and behavioral interviews</li>
@@ -58,7 +58,7 @@ const TermsOfService = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">5. Intellectual Property</h2>
             <p className="text-slate-300 leading-relaxed">
-              The Service and its original content, features, and functionality are owned by Vedrix
+              The Service and its original content, features, and functionality are owned by Autergo
               and are protected by international copyright, trademark, and other intellectual property laws.
             </p>
           </section>
@@ -66,7 +66,7 @@ const TermsOfService = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">6. Limitation of Liability</h2>
             <p className="text-slate-300 leading-relaxed mb-4">
-              To the maximum extent permitted by law, Vedrix shall not be liable for:
+              To the maximum extent permitted by law, Autergo shall not be liable for:
             </p>
             <ul className="list-disc list-inside text-slate-300 space-y-2 ml-4">
               <li>Indirect, incidental, special, or consequential damages</li>
@@ -98,7 +98,7 @@ const TermsOfService = () => {
             <h2 className="text-2xl font-bold mb-4">9. Governing Law</h2>
             <p className="text-slate-300 leading-relaxed">
               These Terms shall be governed by and construed in accordance with the laws of the
-              jurisdiction in which Vedrix operates, without regard to conflict of law principles.
+              jurisdiction in which Autergo operates, without regard to conflict of law principles.
             </p>
           </section>
 
@@ -114,7 +114,7 @@ const TermsOfService = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">11. Contact</h2>
             <p className="text-slate-300 leading-relaxed">
-              For questions about these Terms, please contact us at legal@vedrix.ai
+              For questions about these Terms, please contact us at legal@autergo.ai
             </p>
           </section>
         </div>

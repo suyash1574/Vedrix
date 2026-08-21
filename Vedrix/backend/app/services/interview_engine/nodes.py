@@ -9,6 +9,8 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
 from .state import InterviewState
+from .coordination import build_debate_round_id, coordination_event
+from .response_handling import classify_response_intent
 from .providers import get_fast_llm, get_strong_llm, get_adaptive_llm, get_code_llm
 from app.services.memory_service import memory_service
 
@@ -661,30 +663,27 @@ async def evaluate_answer_node(state: InterviewState) -> Dict[str, Any]:
 
     last_message = state['messages'][-1]['content'] if state.get('messages') else ""
 
-    # Check for "thinking pause" — candidate explicitly asking for time to think.
-    # We don't penalize these — flag them so generate_question_node can re-prompt kindly.
-    is_thinking = (
-        last_message.lower().strip() in THINKING_INDICATORS or
-        any(thinking_phrase in last_message.lower() for thinking_phrase in THINKING_INDICATORS)
-    ) and len(last_message.strip()) < 50
-
-    if is_thinking:
-        # Don't penalize — return a "patient" eval that signals the next node to gently re-prompt
+    # Conversational control turns must not be scored as candidate failures.
+    response_intent = classify_response_intent(last_message)
+    if response_intent in {"thinking_pause", "clarification_request"}:
+        is_clarification = response_intent == "clarification_request"
         return {
             "last_evaluation": {
-                "score": 5.0,  # neutral
+                "score": 5.0,
                 "metrics": {"accuracy": 5, "clarity": 5, "depth": 5, "communication": 5},
-                "topic": "thinking_pause",
+                "topic": response_intent,
                 "skill_category": "behavioral",
                 "should_deep_dive": False,
                 "needs_easier": False,
                 "low_effort": False,
-                "is_thinking_pause": True,  # flag for generate_question to re-prompt kindly
-                "skill_identified": "patience"
+                "is_thinking_pause": not is_clarification,
+                "is_clarification_request": is_clarification,
+                "skill_identified": "patience" if not is_clarification else "clarification",
             },
             "latest_score": 5.0,
             "metrics": {"accuracy": 5, "clarity": 5, "depth": 5, "communication": 5},
-            "total_responses": state.get('total_responses', 0),  # don't increment
+            "total_responses": state.get('total_responses', 0),
+            "follow_up_requested": is_clarification,
         }
 
     # Check for low effort responses
@@ -849,12 +848,16 @@ async def update_memory_node(state: InterviewState) -> Dict[str, Any]:
     try:
         eval_result = state.get('last_evaluation', {})
 
-        # ── Thinking-pause short-circuit ──────────────────────────────────────
-        # Don't advance the question index, don't mark complete, just pass through.
-        if isinstance(eval_result, dict) and eval_result.get("is_thinking_pause"):
-            logger.info("update_memory_node: thinking pause — skipping index advance.")
+        # ── Conversational-control short-circuit ─────────────────────────────
+        # Thinking and clarification turns should re-prompt or answer briefly,
+        # not consume a scored question or change difficulty.
+        if isinstance(eval_result, dict) and (
+            eval_result.get("is_thinking_pause") or eval_result.get("is_clarification_request")
+        ):
+            logger.info("update_memory_node: conversational control turn — skipping index advance.")
             return {
                 "is_coding_mode": False,
+                "follow_up_requested": bool(eval_result.get("is_clarification_request")),
             }
 
         score = eval_result.get('score', 5.0)
@@ -1153,10 +1156,17 @@ Provide your critique in 2-3 bullet points."""
             SystemMessage(content="You are a Skeptical Technical Reviewer. Be critical, concise and analytical."),
             HumanMessage(content=prompt)
         ])
-        return {"skeptic_critique": response.content.strip()}
+        critique = response.content.strip()
+        return {
+            "skeptic_critique": critique,
+            "coordination_trace": [coordination_event(agent="skeptic", event="critique_completed", state=state, details={"round_id": build_debate_round_id(state), "output_length": len(critique)})],
+        }
     except Exception as e:
         logger.error(f"Skeptic critique failed: {e}")
-        return {"skeptic_critique": "Candidate response has potential gaps in deep technical concepts."}
+        return {
+            "skeptic_critique": "Candidate response has potential gaps in deep technical concepts.",
+            "coordination_trace": [coordination_event(agent="skeptic", event="critique_completed", state=state, status="fallback", details={"round_id": build_debate_round_id(state), "error": type(e).__name__})],
+        }
 
 
 async def pragmatist_evaluation_node(state: InterviewState) -> Dict[str, Any]:
@@ -1187,10 +1197,17 @@ Provide your evaluation in 2-3 bullet points."""
             SystemMessage(content="You are a Pragmatic Tech Lead focused on practical, clean code and design."),
             HumanMessage(content=prompt)
         ])
-        return {"pragmatist_critique": response.content.strip()}
+        critique = response.content.strip()
+        return {
+            "pragmatist_critique": critique,
+            "coordination_trace": [coordination_event(agent="pragmatist", event="critique_completed", state=state, details={"round_id": build_debate_round_id(state), "output_length": len(critique)})],
+        }
     except Exception as e:
         logger.error(f"Pragmatist critique failed: {e}")
-        return {"pragmatist_critique": "The proposed solution is acceptable for basic usage but requires optimizations for production scale."}
+        return {
+            "pragmatist_critique": "The proposed solution is acceptable for basic usage but requires optimizations for production scale.",
+            "coordination_trace": [coordination_event(agent="pragmatist", event="critique_completed", state=state, status="fallback", details={"round_id": build_debate_round_id(state), "error": type(e).__name__})],
+        }
 
 
 async def bias_auditor_node(state: InterviewState) -> Dict[str, Any]:
@@ -1222,10 +1239,17 @@ Provide your assessment in 1-2 bullet points."""
             SystemMessage(content="You are a Bias Auditor. Your role is to ensure maximum fairness by looking only at candidate intent and core knowledge."),
             HumanMessage(content=prompt)
         ])
-        return {"bias_auditor_critique": response.content.strip()}
+        critique = response.content.strip()
+        return {
+            "bias_auditor_critique": critique,
+            "coordination_trace": [coordination_event(agent="bias_auditor", event="critique_completed", state=state, details={"round_id": build_debate_round_id(state), "output_length": len(critique)})],
+        }
     except Exception as e:
         logger.error(f"Bias auditor critique failed: {e}")
-        return {"bias_auditor_critique": "Candidate shows correct conceptual understanding despite minor delivery flaws."}
+        return {
+            "bias_auditor_critique": "Candidate shows correct conceptual understanding despite minor delivery flaws.",
+            "coordination_trace": [coordination_event(agent="bias_auditor", event="critique_completed", state=state, status="fallback", details={"round_id": build_debate_round_id(state), "error": type(e).__name__})],
+        }
 
 
 async def consensus_synthesizer_node(state: InterviewState) -> Dict[str, Any]:
@@ -1242,28 +1266,24 @@ async def consensus_synthesizer_node(state: InterviewState) -> Dict[str, Any]:
             last_user_message = m.get("content", "")
             break
 
-    is_thinking = (
-        last_user_message
-        and len(last_user_message.strip()) < 50
-        and (
-            last_user_message.lower().strip() in THINKING_INDICATORS
-            or any(p in last_user_message.lower() for p in THINKING_INDICATORS)
-        )
-    )
+    response_intent = classify_response_intent(last_user_message)
+    is_thinking = response_intent == "thinking_pause"
+    is_clarification = response_intent == "clarification_request"
 
-    if is_thinking:
-        logger.info("Detected thinking pause — skipping debate, returning neutral eval.")
+    if is_thinking or is_clarification:
+        logger.info("Detected conversational control turn (%s) — skipping debate, returning neutral eval.", response_intent)
         return {
             "last_evaluation": {
                 "score": 5.0,
                 "metrics": {"accuracy": 5, "clarity": 5, "depth": 5, "communication": 5},
-                "topic": "thinking_pause",
+                "topic": response_intent,
                 "skill_category": "behavioral",
                 "should_deep_dive": False,
                 "needs_easier": False,
                 "low_effort": False,
-                "is_thinking_pause": True,
-                "skill_identified": "patience",
+                "is_thinking_pause": is_thinking,
+                "is_clarification_request": is_clarification,
+                "skill_identified": "patience" if is_thinking else "clarification",
             },
             "latest_score": 5.0,
             "metrics": {"accuracy": 5, "clarity": 5, "depth": 5, "communication": 5},
@@ -1271,6 +1291,14 @@ async def consensus_synthesizer_node(state: InterviewState) -> Dict[str, Any]:
             "skeptic_critique": None,
             "pragmatist_critique": None,
             "bias_auditor_critique": None,
+            "debate_rounds": {
+                "round_id": build_debate_round_id(state),
+                "status": "skipped",
+                "reason": response_intent,
+                "agents": ["skeptic", "pragmatist", "bias_auditor"],
+            },
+            "follow_up_requested": is_clarification,
+            "coordination_trace": [coordination_event(agent="consensus", event="debate_skipped", state=state, status="skipped", details={"reason": response_intent})],
         }
 
     llm = get_strong_llm()
@@ -1329,7 +1357,14 @@ Compile these reviews into a unified JSON schema. Ensure the final score (0.0-10
             # Clear intermediate critiques
             "skeptic_critique": None,
             "pragmatist_critique": None,
-            "bias_auditor_critique": None
+            "bias_auditor_critique": None,
+            "debate_rounds": {
+                "round_id": build_debate_round_id(state),
+                "status": "completed",
+                "agents": ["skeptic", "pragmatist", "bias_auditor", "consensus"],
+                "consensus_score": parsed.get("score"),
+            },
+            "coordination_trace": [coordination_event(agent="consensus", event="consensus_completed", state=state, details={"score": parsed.get("score"), "agents": ["skeptic", "pragmatist", "bias_auditor"]})],
         }
     except Exception as e:
         logger.error(f"consensus_synthesizer_node failed: {e}")
@@ -1352,6 +1387,13 @@ Compile these reviews into a unified JSON schema. Ensure the final score (0.0-10
             "skeptic_critique": None,
             "pragmatist_critique": None,
             "bias_auditor_critique": None,
+            "debate_rounds": {
+                "round_id": build_debate_round_id(state),
+                "status": "fallback",
+                "agents": ["skeptic", "pragmatist", "bias_auditor", "consensus"],
+                "error": type(e).__name__,
+            },
+            "coordination_trace": [coordination_event(agent="consensus", event="consensus_completed", state=state, status="fallback", details={"error": type(e).__name__})],
         }
 
 
@@ -1416,11 +1458,39 @@ Rules:
         }
     except Exception as e:
         logger.error(f"Code copilot failed: {e}")
-        return {"copilot_request_pending": False}
+        fallback = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "hint": "The coding assistant is temporarily unavailable. Re-check the failing line, simplify the input, and test one assumption at a time.",
+            "trigger": "provider_fallback",
+            "provider_error": type(e).__name__,
+        }
+        return {
+            "copilot_suggestions": list(state.get("copilot_suggestions", [])) + [fallback],
+            "copilot_request_pending": False,
+            "messages": [{"role": "assistant", "content": f"[Co-Pilot Tip]: {fallback['hint']}"}],
+        }
 
 
 async def debate_router_node(state: InterviewState) -> Dict[str, Any]:
-    """Pass-through node to split graph execution into parallel debate paths."""
-    logger.info("Passing through debate_router...")
-    return {}
+    """Start a coordinated debate round before parallel critique fan-out."""
+    logger.info("Starting coordinated debate round...")
+    round_id = build_debate_round_id(state)
+    return {
+        "coordination_round_id": round_id,
+        "debate_rounds": {
+            "round_id": round_id,
+            "turn_id": state.get("turn_id"),
+            "status": "running",
+            "expected_agents": ["skeptic", "pragmatist", "bias_auditor"],
+            "received_agents": [],
+        },
+        "coordination_trace": [
+            coordination_event(
+                agent="debate_router",
+                event="debate_started",
+                state={**state, "coordination_round_id": round_id},
+                details={"expected_agents": ["skeptic", "pragmatist", "bias_auditor"]},
+            )
+        ],
+    }
 

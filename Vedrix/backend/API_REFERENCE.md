@@ -1,6 +1,6 @@
-# 📖 Vedrix API Reference
+# 📖 Autergo API Reference
 
-This document provides a high-level overview of the Vedrix API endpoints. The API follows RESTful principles (where applicable) and uses `/api/v1` as the base prefix.
+This document provides a high-level overview of the Autergo API endpoints. The API follows RESTful principles (where applicable) and uses `/api/v1` as the base prefix.
 
 ## 🔐 Authentication & Users
 
@@ -11,7 +11,7 @@ This document provides a high-level overview of the Vedrix API endpoints. The AP
 | `/auth/register` | `POST` | Create a new user account. |
 | `/users/me` | `GET` | Get current authenticated user profile. |
 
-*Vedrix uses HTTP-only cookies and CSRF tokens for secure session management.*
+*Autergo uses HTTP-only cookies and CSRF tokens for secure session management.*
 
 ## 🎙️ Interview Engine
 

@@ -9,7 +9,7 @@ const PrivacyPolicy = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">1. Introduction</h2>
             <p className="text-slate-300 leading-relaxed">
-              Vedrix AI Interview System ("we", "our", or "us") is committed to protecting your privacy.
+              Autergo AI Interview System ("we", "our", or "us") is committed to protecting your privacy.
               This Privacy Policy explains how we collect, use, disclose, and safeguard your information
               when you use our AI-powered interview platform.
             </p>
@@ -117,7 +117,7 @@ const PrivacyPolicy = () => {
           <section>
             <h2 className="text-2xl font-bold mb-4">10. Contact Us</h2>
             <p className="text-slate-300 leading-relaxed">
-              For privacy-related inquiries, please contact us at privacy@vedrix.ai
+              For privacy-related inquiries, please contact us at privacy@autergo.ai
             </p>
           </section>
         </div>

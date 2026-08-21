@@ -12,6 +12,8 @@ class RAGService:
         self.collection = None
         self.model = None
         self._initialized = False
+        self._fallback_mode = False
+        self._fallback_documents: Dict[str, List[str]] = {}
 
     def _ensure_initialized(self):
         if self._initialized:
@@ -34,9 +36,13 @@ class RAGService:
             self.model = SentenceTransformer("all-MiniLM-L6-v2")
             logger.info("SentenceTransformer model loaded successfully.")
             self._initialized = True
+            self._fallback_mode = False
         except Exception as e:
-            logger.warning(f"RAG service initialization failed: {e}")
-            self._initialized = False
+            # Preserve interview context even when the optional vector stack is
+            # unavailable. Production can install ChromaDB for semantic search.
+            logger.warning(f"RAG service initialization failed; using deterministic fallback: {e}")
+            self._initialized = True
+            self._fallback_mode = True
 
     def _embed_text(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings using the sentence transformer model."""
@@ -66,6 +72,11 @@ class RAGService:
 
         if not paragraphs:
             paragraphs = [resume_text]
+
+        if self._fallback_mode:
+            self._fallback_documents[session_id] = paragraphs
+            logger.info("Stored resume context in deterministic RAG fallback for %s", session_id)
+            return
 
         documents = []
         ids = []
@@ -146,6 +157,10 @@ class RAGService:
                         "language": lang
                     })
 
+                if documents and self._fallback_mode:
+                    self._fallback_documents.setdefault(session_id, []).extend(documents)
+                    return
+
                 if documents:
                     embeddings = self._embed_text(documents)
                     self.collection.add(
@@ -163,6 +178,9 @@ class RAGService:
         self._ensure_initialized()
         if not self._initialized:
             return ""
+
+        if self._fallback_mode:
+            return "\n---\n".join(self._fallback_documents.get(session_id, [])[:limit])
 
         try:
             query_embedding = self._embed_text([query])[0]
@@ -187,6 +205,10 @@ class RAGService:
         """Clean up documents for a given session when completed."""
         self._ensure_initialized()
         if not self._initialized:
+            return
+
+        if self._fallback_mode:
+            self._fallback_documents.pop(session_id, None)
             return
 
         try:

@@ -1,11 +1,11 @@
 # 📋 Software Requirements Specification (SWRTS)
 
-**Project:** Vedrix AI Interview System  
+**Project:** Autergo AI Interview System
 **Version:** 1.0.0  
 **Status:** Approved / Implemented
 
 ## 1. Introduction
-Vedrix is an agentic AI platform designed to automate and enhance the interview process. It provides a realistic, multi-phase interview experience for candidates and a data-driven recruitment tool for HR professionals.
+Autergo is an agentic AI platform designed to automate and enhance the interview process. It provides a realistic, multi-phase interview experience for candidates and a data-driven recruitment tool for HR professionals.
 
 ## 2. System Overview
 The system consists of three main interfaces:

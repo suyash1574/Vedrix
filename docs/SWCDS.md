@@ -1,6 +1,6 @@
 # 🧩 Software Component Design (SWCDS)
 
-**Project:** Vedrix AI Interview System  
+**Project:** Autergo AI Interview System
 **Version:** 1.0.0
 
 ## 1. Interview Engine Component

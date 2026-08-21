@@ -37,9 +37,9 @@ const LoadingScreen = ({ message = 'Loading your workspace...' }) => {
           </motion.div>
         </div>
 
-        {/* Vedrix wordmark */}
+        {/* Autergo wordmark */}
         <div className="mt-6 text-2xl font-black tracking-tighter text-white">
-          Vedrix <span className="text-purple-400 text-xs align-top ml-0.5">AI</span>
+          Autergo <span className="text-purple-400 text-xs align-top ml-0.5">AI</span>
         </div>
 
         {/* Animated dots */}

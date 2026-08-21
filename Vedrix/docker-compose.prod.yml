@@ -12,8 +12,8 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=vedrix_prod
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -35,8 +35,8 @@ services:
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_prod_data:/data
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -52,21 +52,45 @@ services:
           cpus: '0.25'
           memory: 128M
 
+  migrate:
+    image: vedrix/backend:latest
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:${DB_PASSWORD}@db:5432/vedrix_prod
+      - DB_SSL_MODE=disable
+      - LANGGRAPH_CHECKPOINT_ENABLED=true
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     image: vedrix/backend:latest
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:${DB_PASSWORD}@db:5432/vedrix_prod
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=production
+      - DB_SSL_MODE=disable
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-20}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-40}
+      - DB_POOL_TIMEOUT=${DB_POOL_TIMEOUT:-30}
+      - DB_POOL_RECYCLE=${DB_POOL_RECYCLE:-1800}
+      - DB_POOL_PRE_PING=true
+      - LANGGRAPH_CHECKPOINT_ENABLED=true
+      - LANGGRAPH_CHECKPOINT_RETENTION_DAYS=${LANGGRAPH_CHECKPOINT_RETENTION_DAYS:-30}
       - SECRET_KEY=${SECRET_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
-    ports:
-      - "8000:8000"
+      - NOOA_ENABLED=${NOOA_ENABLED:-false}
+      - NOOA_MODEL=${NOOA_MODEL:-nvidia_nim/nvidia/nemotron-3-super-120b-a12b}
+      - VEDRIX_NOOA_GRAPH=${VEDRIX_NOOA_GRAPH:-false}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+    expose:
+      - "8000"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     restart: unless-stopped

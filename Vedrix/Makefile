@@ -1,4 +1,4 @@
-# Vedrix Makefile
+# Autergo Makefile
 # Common development and deployment commands
 
 # Colors
@@ -7,7 +7,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 NC := \033[0m # No Color
 
-.PHONY: help install dev build test lint clean up logs db-backup db-restore deploy-staging deploy-prod
+.PHONY: help install dev build test lint clean up logs db-migrate db-backup db-restore deploy-staging deploy-prod
 
 # ─────────────────────────────────────────────────────────
 # Development Commands
@@ -15,7 +15,7 @@ NC := \033[0m # No Color
 
 help: ## Show this help message
 	@echo ""
-	@echo "Vedrix Makefile"
+	@echo "Autergo Makefile"
 	@echo "==============="
 	@echo ""
 	@echo "Development:"
@@ -27,7 +27,8 @@ help: ## Show this help message
 	@echo ""
 	@echo "Database:"
 	@echo "  make db-start       - Start PostgreSQL & Redis"
-	@echo "  make db-backup      - Backup database"
+	@echo "  make db-migrate     - Apply PostgreSQL Alembic migrations"
+	@echo "  make db-backup      - Backup PostgreSQL database"
 	@echo "  make db-restore     - Restore database"
 	@echo ""
 	@echo "Docker:"
@@ -52,7 +53,7 @@ install: ## Install all dependencies
 	@echo "$(GREEN)Installation complete!$(NC)"
 
 dev: ## Start development servers (requires run_dev.py)
-	@echo "$(BLUE)Starting Vedrix development servers...$(NC)"
+	@echo "$(BLUE)Starting Autergo development servers...$(NC)"
 	@python run_dev.py
 
 build: ## Build frontend for production
@@ -76,15 +77,27 @@ lint: ## Run linting
 # Database Commands
 # ─────────────────────────────────────────────────────────
 
+db-migrate: ## Apply PostgreSQL Alembic migrations
+	@echo "$(BLUE)Applying PostgreSQL migrations...$(NC)"
+	@./scripts/migrate-postgres.sh
+
+# DATABASE_URL must point to the target PostgreSQL instance. The script does not
+# read or import the retired SQLite database.
+
+
 db-start: ## Start PostgreSQL and Redis with Docker
 	@echo "$(BLUE)Starting database services...$(NC)"
 	@docker-compose up -d db redis
 
-db-backup: ## Backup database
-	@echo "$(YELLOW)Backing up database...$(NC)"
+db-backup: ## Backup PostgreSQL database using DATABASE_URL or the local production container
+	@echo "$(YELLOW)Backing up PostgreSQL database...$(NC)"
 	@mkdir -p backups
-	@docker exec vedrix-db-prod pg_dump -U postgres vedrix_prod > backups/vedrix_backup_$$(date +%Y%m%d_%H%M%S).sql
-	@echo "$(GREEN)Database backed up!$(NC)"
+	@if [ -n "$(DATABASE_URL)" ]; then \
+		pg_dump --format=custom --file=backups/vedrix_$$(date +%Y%m%d_%H%M%S).dump "$(DATABASE_URL)"; \
+	else \
+		docker exec vedrix-db-prod pg_dump -U postgres -d vedrix_prod --format=custom > backups/vedrix_$$(date +%Y%m%d_%H%M%S).dump; \
+	fi
+	@echo "$(GREEN)PostgreSQL backup completed!$(NC)"
 
 db-restore: ## Restore database (requires filename)
 	@echo "$(YELLOW)Restoring database...$(NC)"
