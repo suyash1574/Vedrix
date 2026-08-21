@@ -69,6 +69,10 @@ class InterviewState(TypedDict):
     last_response_id: Optional[str]
     last_response_kind: Optional[str]
     active_question_id: Optional[str]
+    # Timing/precision observability for the current and previous turn.
+    turn_timing: Dict[str, Any]
+    precision_flags: List[str]
+    response_degraded: bool
 
     # Next question to be asked
     next_question: Optional[Dict]

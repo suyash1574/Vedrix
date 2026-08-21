@@ -20,6 +20,7 @@ from app.services.interview_engine.nodes import _initialize_skills_to_cover
 from app.services.interview_engine.state import InterviewState
 from app.services.interview_engine.coordination import build_turn_id, coordination_event
 from app.services.interview_engine.response_handling import decide_response, response_notice, response_state_update
+from app.services.interview_engine.timing import TimingProbe, elapsed_ms
 from app.services.voice_service import voice_service
 from app.services.supervisor_service import supervisor_registry, SupervisorObservation
 import time as time_module
@@ -95,6 +96,54 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+async def _deliver_question(
+    *,
+    session_id: str,
+    question: dict,
+    job_role: Optional[str] = None,
+    is_coding: bool = False,
+    language: str = "python",
+) -> None:
+    """Send text immediately; attach TTS later so audio never blocks turn progress."""
+    question_id = question.get("id") if isinstance(question, dict) else None
+    await manager.send_json({
+        "type": "question",
+        "data": question,
+        "question_id": question_id,
+        "job_role": job_role,
+        "is_coding": is_coding,
+        "language": language,
+    }, session_id)
+
+    async def _audio_task() -> None:
+        try:
+            question_text = question.get("question", "") if isinstance(question, dict) else ""
+            if not question_text:
+                return
+            audio = await asyncio.wait_for(
+                voice_service.speak_text(question_text),
+                timeout=float(getattr(settings, "INTERVIEW_TTS_TIMEOUT_SECONDS", 3.0)),
+            )
+            if audio:
+                await manager.send_json({
+                    "type": "question_audio",
+                    "question_id": question_id,
+                    "audio": audio,
+                }, session_id)
+        except Exception as exc:
+            logger.debug("Question TTS skipped for %s: %s", session_id, exc)
+
+    asyncio.create_task(_audio_task())
+
+
+async def _collect_graph_updates(graph: Any, config: dict) -> list[dict]:
+    """Collect one graph turn under the configured critical-path timeout."""
+    updates: list[dict] = []
+    async for chunk in graph.astream(None, config=config, stream_mode="updates"):
+        updates.append(chunk)
+    return updates
 
 
 def _verify_ws_token(token: str) -> Optional[int]:
@@ -524,6 +573,9 @@ async def websocket_endpoint(
             "last_response_id": None,
             "last_response_kind": None,
             "active_question_id": None,
+            "turn_timing": {},
+            "precision_flags": [],
+            "response_degraded": False,
             "next_question": None,
             "code_snippet": None,
             "code_language": None,
@@ -574,7 +626,7 @@ async def websocket_endpoint(
         try:
             current_values = None
             try:
-                async with asyncio.timeout(60):  # 60 second timeout for initial question
+                async with asyncio.timeout(float(getattr(settings, "INTERVIEW_TURN_TIMEOUT_SECONDS", 20.0))):
                     async for event in interview_graph_module.interview_graph.astream(initial_state, config=config, stream_mode="values"):
                         if event.get("next_question"):
                             current_values = event
@@ -590,27 +642,13 @@ async def websocket_endpoint(
                 "awaiting_candidate_response": True,
             })
 
-            # Generate TTS audio for the question
-            audio_base64 = ""
-            try:
-                question_text = q.get("question", "") if isinstance(q, dict) else ""
-                if question_text:
-                    audio_base64 = await voice_service.speak_text(question_text)
-            except Exception as e:
-                logger.warning(f"TTS generation failed: {e}")
-
-            response_data = {
-                "type": "question",
-                "data": q,
-                "question_id": q.get("id") if isinstance(q, dict) else None,
-                "job_role": job_role,
-                "is_coding": current_values.get("is_coding_mode", False),
-                "language": current_values.get("code_language", "python"),
-            }
-            if audio_base64:
-                response_data["audio"] = audio_base64
-
-            await manager.send_json(response_data, session_id)
+            await _deliver_question(
+                session_id=session_id,
+                question=q,
+                job_role=job_role,
+                is_coding=current_values.get("is_coding_mode", False),
+                language=current_values.get("code_language", "python"),
+            )
         except Exception as e:
             logger.error(f"Interview start failed [{session_id}]: {e}")
             await manager.send_json({"type": "error", "data": f"Engine Error: {str(e)}"}, session_id)
@@ -633,6 +671,7 @@ async def websocket_endpoint(
             user_answer = ""
             user_code = ""
             typing_duration = None
+            turn_probe = TimingProbe()
 
             if "text" in message:
                 try:
@@ -868,8 +907,7 @@ async def websocket_endpoint(
                     if user_answer and db_session_id:
                         if not typing_duration:
                             try:
-                                state_vals = await interview_graph_module.interview_graph.aget_state(config)
-                                q_start = state_vals.values.get("question_start_epoch")
+                                q_start = current_values.get("question_start_epoch")
                                 if q_start:
                                     typing_duration = time.time() - q_start
                             except Exception as state_err:
@@ -885,23 +923,26 @@ async def websocket_endpoint(
                                     db=db
                                 )
 
-                    # Query ChromaDB context asynchronously
+                    # Query RAG context under a short optional budget. The
+                    # answer itself remains usable when retrieval is slow.
                     rag_context = ""
+                    rag_started = time_module.perf_counter()
                     if db_session_id:
                         try:
                             query_str = user_answer if user_answer else user_code
-                            rag_context = await asyncio.to_thread(
-                                rag_service.query_context,
-                                session_id=str(db_session_id),
-                                query=query_str[:300]
-                            )
+                            async with asyncio.timeout(float(getattr(settings, "INTERVIEW_RAG_TIMEOUT_SECONDS", 0.8))):
+                                rag_context = await asyncio.to_thread(
+                                    rag_service.query_context,
+                                    session_id=str(db_session_id),
+                                    query=query_str[:300]
+                                )
                         except Exception as e:
-                            logger.warning(f"Failed to query RAG context: {e}")
+                            logger.debug(f"RAG context skipped: {e}")
+                    turn_probe.mark("rag_context", rag_started)
                     if not rag_context:
                         rag_context = rag_seed_context[:2500] if rag_seed_context else ""
 
-                    current_state = await interview_graph_module.interview_graph.aget_state(config)
-                    state_values = current_state.values if current_state else {}
+                    state_values = current_values if isinstance(current_values, dict) else {}
                     turn_seed = {
                         "current_question_index": state_values.get("current_question_index", 0),
                         "total_responses": state_values.get("total_responses", 0),
@@ -931,11 +972,11 @@ async def websocket_endpoint(
 
                     # Execute code via Judge0 before AI evaluation
                     if user_code:
+                        code_started = time_module.perf_counter()
                         await manager.send_json({"type": "status", "data": "Judge0: Executing code..."}, session_id)
                         
                         # Audit #17: Fetch current state to get correct code_language
-                        current_state_vals = await interview_graph_module.interview_graph.aget_state(config)
-                        current_lang = current_state_vals.values.get("code_language") or "python"
+                        current_lang = state_values.get("code_language") or "python"
                         
                         exec_result = await code_execution_service.execute(
                             source_code=user_code,
@@ -950,9 +991,15 @@ async def websocket_endpoint(
                             f"Errors: {exec_result['stderr'][:300]}"
                         )
                         update = {**turn_update, "code_snippet": user_code, "last_candidate_answer": enriched_content, "messages": [{"role": "user", "content": enriched_content}], "rag_context": rag_context}
+                        turn_probe.mark("code_execution", code_started)
+                    graph_started = time_module.perf_counter()
                     await interview_graph_module.interview_graph.aupdate_state(config, update)
 
-                    async for chunk in interview_graph_module.interview_graph.astream(None, config=config, stream_mode="updates"):
+                    graph_chunks = await asyncio.wait_for(
+                        _collect_graph_updates(interview_graph_module.interview_graph, config),
+                        timeout=float(getattr(settings, "INTERVIEW_TURN_TIMEOUT_SECONDS", 20.0)),
+                    )
+                    for chunk in graph_chunks:
                         for node_name, output in chunk.items():
                             if output.get("coordination_trace"):
                                 await manager.send_json({
@@ -982,31 +1029,41 @@ async def websocket_endpoint(
                                 q = output["next_question"]
                                 all_questions.append(q)
 
-                                # Generate TTS audio for the question
-                                audio_base64 = ""
-                                try:
-                                    question_text = q.get("question", "") if isinstance(q, dict) else ""
-                                    if question_text:
-                                        audio_base64 = await voice_service.speak_text(question_text)
-                                except Exception as e:
-                                    logger.warning(f"TTS generation failed: {e}")
-
                                 await interview_graph_module.interview_graph.aupdate_state(config, {
                                     "active_question_id": str(q.get("id")) if isinstance(q, dict) and q.get("id") is not None else None,
                                     "awaiting_candidate_response": True,
                                 })
-                                response_data = {
-                                    "type": "question",
-                                    "data": q,
-                                    "question_id": q.get("id") if isinstance(q, dict) else None,
-                                    "is_coding": output.get("is_coding_mode", False),
-                                    "language": output.get("code_language", "python"),
-                                }
-                                if audio_base64:
-                                    response_data["audio"] = audio_base64
+                                await _deliver_question(
+                                    session_id=session_id,
+                                    question=q,
+                                    job_role=job_role,
+                                    is_coding=output.get("is_coding_mode", False),
+                                    language=output.get("code_language", "python"),
+                                )
 
-                                await manager.send_json(response_data, session_id)
-
+                    turn_probe.mark("graph_execution", graph_started)
+                    final_state = await interview_graph_module.interview_graph.aget_state(config)
+                    precision_flags = []
+                    final_values = final_state.values if final_state else {}
+                    if not rag_context:
+                        precision_flags.append("rag_context_unavailable")
+                    evaluation = final_values.get("last_evaluation") if isinstance(final_values, dict) else None
+                    if isinstance(evaluation, dict):
+                        confidence = evaluation.get("confidence")
+                        if confidence is not None and float(confidence) < 0.55:
+                            precision_flags.append("low_confidence_evaluation")
+                        if not evaluation.get("evidence"):
+                            precision_flags.append("evaluation_without_evidence")
+                    timing_snapshot = turn_probe.snapshot()
+                    await interview_graph_module.interview_graph.aupdate_state(config, {
+                        "turn_timing": timing_snapshot,
+                        "precision_flags": precision_flags,
+                        "response_degraded": bool(precision_flags),
+                    })
+                    await manager.send_json({
+                        "type": "turn_timing",
+                        "data": {**timing_snapshot, "precision_flags": precision_flags},
+                    }, session_id)
                     final_state = await interview_graph_module.interview_graph.aget_state(config)
                     if final_state and final_state.values:
                         await manager.broadcast_to_hr({
@@ -1021,6 +1078,9 @@ async def websocket_endpoint(
                                 "supervisor_mode": final_state.values.get("supervisor_mode", "suggest"),
                                 "coordination_round": final_state.values.get("debate_rounds"),
                                 "coordination_trace": (final_state.values.get("coordination_trace", []) or [])[-20:],
+                                "turn_timing": final_state.values.get("turn_timing", {}),
+                                "precision_flags": final_state.values.get("precision_flags", []),
+                                "response_degraded": final_state.values.get("response_degraded", False),
                             }
                         }, session_id)
 

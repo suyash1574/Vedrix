@@ -47,6 +47,11 @@ def _is_react_enabled() -> bool:
     return USE_REACT_AGENTS
 
 
+def _is_fast_react_path() -> bool:
+    """Use the single structured legacy node when ReAct latency is prioritized."""
+    return os.environ.get("VEDRIX_REACT_FAST_PATH", "1").lower() not in ("0", "false", "no", "off", "")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Lazy singletons — ReAct agents are constructed once per process and reused
 # across all interview sessions to amortize registry build cost.
@@ -128,7 +133,7 @@ async def react_interviewer_node(state: InterviewState) -> Dict[str, Any]:
     Falls back to `generate_question_node` if ReAct is disabled or the agent
     fails to produce a valid question.
     """
-    if not _is_react_enabled():
+    if not _is_react_enabled() or _is_fast_react_path():
         return await _call_fallback(_fallback_interviewer, state)
 
     # Honor explicit HR takeover / pause states (deterministic guards)
@@ -159,7 +164,7 @@ async def react_evaluator_node(state: InterviewState) -> Dict[str, Any]:
     Falls back to `evaluate_answer_node` if ReAct is disabled or the agent
     fails to produce a structured evaluation.
     """
-    if not _is_react_enabled():
+    if not _is_react_enabled() or _is_fast_react_path():
         return await _call_fallback(_fallback_evaluator, state)
 
     try:

@@ -233,41 +233,41 @@ def _get_routes() -> dict[TaskType, TaskRoute]:
             task=TaskType.QUESTION_GEN,
             description="Fast question generation with conversational tone",
             chain=[
-                ModelSpec("groq", "llama-3.1-8b-instant", temperature=0.7),
-                ModelSpec("nvidia", "meta/llama-3.1-8b-instruct", temperature=0.7),
+                ModelSpec("groq", "llama-3.1-8b-instant", temperature=0.4, max_tokens=420, timeout=10),
+                ModelSpec("nvidia", "meta/llama-3.1-8b-instruct", temperature=0.4, max_tokens=420, timeout=10),
             ],
         ),
         TaskType.DEEP_FOLLOWUP: TaskRoute(
             task=TaskType.DEEP_FOLLOWUP,
             description="Deep reasoning for adaptive follow-up questions",
             chain=[
-                ModelSpec("nvidia", "meta/llama-3.1-70b-instruct", temperature=0.4),
-                ModelSpec("groq", "llama-3.3-70b-versatile", temperature=0.4),
+                ModelSpec("nvidia", "meta/llama-3.1-70b-instruct", temperature=0.3, max_tokens=520, timeout=15),
+                ModelSpec("groq", "llama-3.3-70b-versatile", temperature=0.3, max_tokens=520, timeout=15),
             ],
         ),
         TaskType.ANSWER_EVAL: TaskRoute(
             task=TaskType.ANSWER_EVAL,
             description="Structured scoring and feedback generation",
             chain=[
-                ModelSpec("groq", "llama-3.3-70b-versatile", temperature=0.1),
-                ModelSpec("nvidia", "meta/llama-3.1-70b-instruct", temperature=0.1),
+                ModelSpec("groq", "llama-3.3-70b-versatile", temperature=0.1, max_tokens=650, timeout=12),
+                ModelSpec("nvidia", "meta/llama-3.1-70b-instruct", temperature=0.1, max_tokens=650, timeout=12),
             ],
         ),
         TaskType.CODE_EVAL: TaskRoute(
             task=TaskType.CODE_EVAL,
             description="Code-specific evaluation with logic analysis",
             chain=[
-                ModelSpec("openrouter", "qwen/qwen-2.5-coder-32b-instruct", temperature=0.0),
-                ModelSpec("groq", "llama-3.3-70b-versatile", temperature=0.0),
-                ModelSpec("groq", "llama-3.1-8b-instant", temperature=0.0),
+                ModelSpec("openrouter", "qwen/qwen-2.5-coder-32b-instruct", temperature=0.0, max_tokens=800, timeout=18),
+                ModelSpec("groq", "llama-3.3-70b-versatile", temperature=0.0, max_tokens=800, timeout=15),
+                ModelSpec("groq", "llama-3.1-8b-instant", temperature=0.0, max_tokens=800, timeout=10),
             ],
         ),
         TaskType.REPORT_GEN: TaskRoute(
             task=TaskType.REPORT_GEN,
             description="Analytical report generation from interview transcript",
             chain=[
-                ModelSpec("nvidia", "meta/llama-3.1-70b-instruct", temperature=0.2),
-                ModelSpec("groq", "llama-3.3-70b-versatile", temperature=0.2),
+                ModelSpec("nvidia", "meta/llama-3.1-70b-instruct", temperature=0.2, max_tokens=1200, timeout=25),
+                ModelSpec("groq", "llama-3.3-70b-versatile", temperature=0.2, max_tokens=1200, timeout=25),
             ],
         ),
         TaskType.RESUME_PARSE: TaskRoute(

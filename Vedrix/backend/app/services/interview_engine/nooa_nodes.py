@@ -15,6 +15,7 @@ from typing import Any, Dict
 from .state import InterviewState
 from .response_handling import classify_response_intent
 from .nodes import generate_question_node, evaluate_answer_node
+from .timing import bounded_context
 from ..nooa_agents import (
     AnswerEvaluationRequest,
     InterviewContext,
@@ -27,16 +28,16 @@ logger = logging.getLogger(__name__)
 
 def _context_from_state(state: InterviewState) -> InterviewContext:
     messages = state.get("messages") or []
-    prior_questions = [
-        str(item.get("content") or "")[:1200]
-        for item in messages
-        if isinstance(item, dict) and item.get("role") == "assistant"
-    ][-20:]
-    prior_answers = [
-        str(item.get("content") or "")[:12000]
-        for item in messages
-        if isinstance(item, dict) and item.get("role") == "user"
-    ][-20:]
+    prior_questions = bounded_context(
+        [item.get("content") for item in messages if isinstance(item, dict) and item.get("role") == "assistant"],
+        limit=8,
+        chars=4200,
+    )
+    prior_answers = bounded_context(
+        [item.get("content") for item in messages if isinstance(item, dict) and item.get("role") == "user"],
+        limit=8,
+        chars=5200,
+    )
     return InterviewContext(
         role=state.get("job_role") or "Software Engineer",
         phase=state.get("current_phase") or "technical",
@@ -133,13 +134,13 @@ async def nooa_evaluator_node(state: InterviewState) -> Dict[str, Any]:
     request = AnswerEvaluationRequest(
         context=_context_from_state(state),
         question=str(last_question.get("question") or ""),
-        answer=answer[-20000:],
+        answer=answer[-12000:],
         expected_skill=str(last_question.get("skill_tested") or "general reasoning"),
     )
     evaluation = await nooa_interview_adapter.evaluate_answer(request)
     metrics = {
         "accuracy": round(evaluation.correctness, 2),
-        "clarity": round(evaluation.communication, 2),
+        "clarity": round((evaluation.relevance + evaluation.communication) / 2, 2),
         "depth": round(evaluation.depth, 2),
         "communication": round(evaluation.communication, 2),
     }

@@ -240,10 +240,23 @@ def _fallback_report(request: ReportRequest) -> InterviewReport:
 
 
 class NooaInterviewAdapter:
-    """Application-facing NOOA adapter with bounded calls and safe fallbacks."""
+    """Application-facing NOOA adapter with per-operation budgets and safe fallbacks."""
 
-    def __init__(self, timeout_seconds: float = 45.0):
-        self.timeout_seconds = timeout_seconds
+    def __init__(self, timeout_seconds: float | None = None):
+        self.timeout_seconds = timeout_seconds or float(getattr(settings, "INTERVIEW_TURN_TIMEOUT_SECONDS", 20.0))
+        self._question_agent = None
+        self._evaluation_agent = None
+        self._report_agent = None
+        self._coaching_agent = None
+
+    def _timeout(self, operation: str) -> float:
+        configured = {
+            "question": getattr(settings, "INTERVIEW_QUESTION_TIMEOUT_SECONDS", 10.0),
+            "evaluation": getattr(settings, "INTERVIEW_EVALUATION_TIMEOUT_SECONDS", 12.0),
+            "report": max(self.timeout_seconds, 20.0),
+            "coaching": max(self.timeout_seconds, 20.0),
+        }.get(operation, self.timeout_seconds)
+        return max(1.0, min(float(configured), self.timeout_seconds if operation in {"question", "evaluation"} else float(configured)))
 
     @property
     def enabled(self) -> bool:
@@ -253,9 +266,10 @@ class NooaInterviewAdapter:
         if not self.enabled or _QuestionPlannerAgent is None:
             return _fallback_question(request)
         try:
-            agent = _QuestionPlannerAgent()
+            if self._question_agent is None:
+                self._question_agent = _QuestionPlannerAgent()
             return await asyncio.wait_for(
-                agent.plan_next_question(request), timeout=self.timeout_seconds
+                self._question_agent.plan_next_question(request), timeout=self._timeout("question")
             )
         except Exception:
             logger.exception("NOOA question planning failed; using deterministic fallback")
@@ -265,9 +279,10 @@ class NooaInterviewAdapter:
         if not self.enabled or _AnswerEvaluatorAgent is None:
             return _fallback_evaluation(request)
         try:
-            agent = _AnswerEvaluatorAgent()
+            if self._evaluation_agent is None:
+                self._evaluation_agent = _AnswerEvaluatorAgent()
             return await asyncio.wait_for(
-                agent.evaluate(request), timeout=self.timeout_seconds
+                self._evaluation_agent.evaluate(request), timeout=self._timeout("evaluation")
             )
         except Exception:
             logger.exception("NOOA answer evaluation failed; using deterministic fallback")
@@ -277,9 +292,10 @@ class NooaInterviewAdapter:
         if not self.enabled or _ReportAgent is None:
             return _fallback_report(request)
         try:
-            agent = _ReportAgent()
+            if self._report_agent is None:
+                self._report_agent = _ReportAgent()
             return await asyncio.wait_for(
-                agent.generate_report(request), timeout=self.timeout_seconds
+                self._report_agent.generate_report(request), timeout=self._timeout("report")
             )
         except Exception:
             logger.exception("NOOA report generation failed; using deterministic fallback")
@@ -298,9 +314,10 @@ class NooaInterviewAdapter:
                 rationale="Deterministic fallback coaching plan from the validated report.",
             )
         try:
-            agent = _CoachingAgent()
+            if self._coaching_agent is None:
+                self._coaching_agent = _CoachingAgent()
             return await asyncio.wait_for(
-                agent.create_plan(request), timeout=self.timeout_seconds
+                self._coaching_agent.create_plan(request), timeout=self._timeout("coaching")
             )
         except Exception:
             logger.exception("NOOA coaching generation failed; using deterministic fallback")

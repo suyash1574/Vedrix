@@ -37,6 +37,16 @@ class Settings(BaseSettings):
     # NVIDIA Object-Oriented Agents (NOOA) migration flag
     NOOA_ENABLED: bool = False
     NOOA_MODEL: str = "nvidia_nim/nvidia/nemotron-3-super-120b-a12b"
+
+    # Live interview latency and precision budgets
+    INTERVIEW_TURN_TIMEOUT_SECONDS: float = 20.0
+    INTERVIEW_QUESTION_TIMEOUT_SECONDS: float = 10.0
+    INTERVIEW_EVALUATION_TIMEOUT_SECONDS: float = 12.0
+    INTERVIEW_TTS_TIMEOUT_SECONDS: float = 3.0
+    INTERVIEW_RAG_TIMEOUT_SECONDS: float = 0.8
+    INTERVIEW_MAX_CONTEXT_MESSAGES: int = 8
+    INTERVIEW_MAX_CONTEXT_CHARS: int = 9000
+    INTERVIEW_PROGRESS_HEARTBEAT_SECONDS: float = 4.0
     
     # OpenRouter Base URLs
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
